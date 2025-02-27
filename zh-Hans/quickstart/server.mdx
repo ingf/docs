@@ -1,0 +1,192 @@
+---
+title: "服务器开发者指南"
+description: "开始构建您自己的服务器,以在 Claude Desktop 和其他客户端中使用"
+---
+
+本指南将帮助您开始构建 MCP 服务器。我们将使用 TypeScript SDK,但这些概念适用于所有语言。
+
+<Note>
+  本指南假设您已经安装了 [Node.js](https://nodejs.org/) 16+ 和 [npm](https://www.npmjs.com/)。
+</Note>
+
+## 创建新项目
+
+首先创建一个新的 npm 项目并安装依赖:
+
+```bash
+mkdir my-mcp-server
+cd my-mcp-server
+npm init -y
+npm install @mcp/sdk typescript ts-node @types/node
+```
+
+## 基本服务器
+
+创建 `server.ts` 文件:
+
+```typescript
+import { Server } from "@mcp/sdk";
+
+const server = new Server({
+  name: "example-server",
+  version: "1.0.0"
+});
+
+// 启动服务器
+server.listen();
+```
+
+这个最小的服务器可以连接,但不提供任何功能。让我们添加一些基本功能。
+
+## 添加资源
+
+资源允许您的服务器向客户端提供数据:
+
+```typescript
+// 注册资源列表处理程序
+server.setRequestHandler("resources/list", async () => {
+  return {
+    resources: [
+      {
+        uri: "file:///hello.txt",
+        name: "示例文本",
+        mimeType: "text/plain"
+      }
+    ]
+  };
+});
+
+// 处理资源读取
+server.setRequestHandler("resources/read", async (request) => {
+  if (request.uri === "file:///hello.txt") {
+    return {
+      content: "Hello from MCP!"
+    };
+  }
+  throw new Error("资源未找到");
+});
+```
+
+## 添加工具
+
+工具允许您的服务器暴露可执行的功能:
+
+```typescript
+// 注册计算器工具
+server.addTool({
+  name: "calculator",
+  description: "执行基本的数学运算",
+  inputSchema: {
+    type: "object",
+    properties: {
+      operation: {
+        type: "string",
+        enum: ["add", "subtract", "multiply", "divide"]
+      },
+      a: { type: "number" },
+      b: { type: "number" }
+    },
+    required: ["operation", "a", "b"]
+  },
+  handler: async (params) => {
+    const { operation, a, b } = params;
+    let result;
+    
+    switch(operation) {
+      case "add": result = a + b; break;
+      case "subtract": result = a - b; break;
+      case "multiply": result = a * b; break;
+      case "divide": 
+        if(b === 0) throw new Error("除数不能为零");
+        result = a / b;
+        break;
+    }
+
+    return {
+      content: [{
+        type: "text",
+        text: `结果是 ${result}`
+      }]
+    };
+  }
+});
+```
+
+## 添加提示
+
+提示允许您定义可重用的模板:
+
+```typescript
+// 注册提示列表处理程序
+server.setRequestHandler("prompts/list", async () => {
+  return {
+    prompts: [
+      {
+        name: "greet",
+        description: "生成问候语",
+        arguments: [
+          {
+            name: "name",
+            description: "要问候的人的名字",
+            required: true
+          }
+        ]
+      }
+    ]
+  };
+});
+
+// 处理提示执行
+server.setRequestHandler("prompts/execute", async (request) => {
+  if (request.name === "greet") {
+    const name = request.arguments.name;
+    return {
+      content: `你好, ${name}!`
+    };
+  }
+  throw new Error("提示未找到");
+});
+```
+
+## 运行服务器
+
+使用 ts-node 运行服务器:
+
+```bash
+npx ts-node server.ts
+```
+
+## 测试服务器
+
+使用 MCP Inspector 测试您的服务器:
+
+```bash
+npx @mcp/inspector
+```
+
+然后:
+
+1. 连接到您的服务器
+2. 列出可用资源
+3. 读取资源内容
+4. 调用计算器工具
+5. 执行问候提示
+
+## 下一步
+
+<CardGroup cols={2}>
+  <Card
+    title="架构概述"
+    icon="diagram-project"
+    href="/docs/concepts/architecture"
+  >
+    了解 MCP 如何连接客户端、服务器和 LLMs
+  </Card>
+  <Card
+    title="使用 LLMs 构建"
+    icon="robot"
+    href="/tutorials/building-mcp-with-llms"
+  >
+    了解如何使用 LLMs 加速您的 MCP 开发
+  </Card>
+</CardGroup> 

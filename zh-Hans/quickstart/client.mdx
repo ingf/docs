@@ -1,0 +1,159 @@
+---
+title: "客户端开发者指南"
+description: "开始构建您自己的 MCP 客户端"
+---
+
+本指南将帮助您开始构建 MCP 客户端。我们将使用 TypeScript SDK,但这些概念适用于所有语言。
+
+<Note>
+  本指南假设您已经安装了 [Node.js](https://nodejs.org/) 16+ 和 [npm](https://www.npmjs.com/)。
+</Note>
+
+## 创建新项目
+
+首先创建一个新的 npm 项目并安装依赖:
+
+```bash
+mkdir my-mcp-client
+cd my-mcp-client
+npm init -y
+npm install @mcp/sdk typescript ts-node @types/node
+```
+
+## 基本客户端
+
+创建 `client.ts` 文件:
+
+```typescript
+import { Client } from "@mcp/sdk";
+
+const client = new Client({
+  name: "example-client",
+  version: "1.0.0"
+});
+
+// 连接到服务器
+await client.connect("stdio", {
+  command: "python server.py"
+});
+
+// 获取服务器信息
+const info = await client.getServerInfo();
+console.log("已连接到:", info.name);
+```
+
+## 处理资源
+
+访问服务器资源:
+
+```typescript
+// 列出可用资源
+const resources = await client.resources.list();
+console.log("可用资源:", resources);
+
+// 读取资源内容
+const content = await client.resources.read("file:///hello.txt");
+console.log("资源内容:", content);
+
+// 监听资源变化
+client.resources.watch("file:///data.json", (content) => {
+  console.log("资源已更新:", content);
+});
+```
+
+## 使用工具
+
+调用服务器工具:
+
+```typescript
+// 列出可用工具
+const tools = await client.tools.list();
+console.log("可用工具:", tools);
+
+// 调用计算器工具
+const result = await client.tools.call("calculator", {
+  operation: "add",
+  a: 5,
+  b: 3
+});
+console.log("计算结果:", result);
+```
+
+## 使用提示
+
+处理服务器提示:
+
+```typescript
+// 列出可用提示
+const prompts = await client.prompts.list();
+console.log("可用提示:", prompts);
+
+// 执行问候提示
+const greeting = await client.prompts.execute("greet", {
+  name: "世界"
+});
+console.log("问候语:", greeting);
+```
+
+## 错误处理
+
+实现健壮的错误处理:
+
+```typescript
+try {
+  await client.resources.read("file:///不存在.txt");
+} catch (error) {
+  if (error.code === "NOT_FOUND") {
+    console.error("资源未找到");
+  } else {
+    console.error("发生错误:", error.message);
+  }
+}
+```
+
+## 事件处理
+
+监听客户端事件:
+
+```typescript
+// 监听连接状态
+client.on("connected", () => {
+  console.log("已连接到服务器");
+});
+
+client.on("disconnected", () => {
+  console.log("与服务器断开连接");
+});
+
+// 监听错误
+client.on("error", (error) => {
+  console.error("发生错误:", error);
+});
+```
+
+## 运行客户端
+
+使用 ts-node 运行客户端:
+
+```bash
+npx ts-node client.ts
+```
+
+## 下一步
+
+<CardGroup cols={2}>
+  <Card
+    title="架构概述"
+    icon="diagram-project"
+    href="/docs/concepts/architecture"
+  >
+    了解 MCP 如何连接客户端、服务器和 LLMs
+  </Card>
+  <Card
+    title="使用 LLMs 构建"
+    icon="robot"
+    href="/tutorials/building-mcp-with-llms"
+  >
+    了解如何使用 LLMs 加速您的 MCP 开发
+  </Card>
+</CardGroup> 

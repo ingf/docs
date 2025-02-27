@@ -1,0 +1,161 @@
+---
+title: "传输"
+description: "了解 MCP 的通信机制"
+---
+
+Model Context Protocol (MCP) 中的传输为客户端和服务器之间的通信提供了基础。传输层处理消息如何发送和接收的底层机制。
+
+## 消息格式
+
+MCP 使用 [JSON-RPC](https://www.jsonrpc.org/) 2.0 作为其线路格式。传输层负责将 MCP 协议消息转换为 JSON-RPC 格式进行传输,并将接收到的 JSON-RPC 消息转换回 MCP 协议消息。
+
+使用了三种类型的 JSON-RPC 消息:
+
+### 请求
+```typescript
+{
+  jsonrpc: "2.0",
+  id: number | string,
+  method: string,
+  params?: object
+}
+```
+
+### 响应
+```typescript
+{
+  jsonrpc: "2.0",
+  id: number | string,
+  result?: any,
+  error?: {
+    code: number,
+    message: string,
+    data?: any
+  }
+}
+```
+
+### 通知
+```typescript
+{
+  jsonrpc: "2.0",
+  method: string,
+  params?: object
+}
+```
+
+## 传输类型
+
+MCP 支持多种传输类型:
+
+### 标准输入/输出 (stdio)
+
+stdio 传输适用于本地进程间通信:
+
+```typescript
+import { createStdioTransport } from "@mcp/sdk";
+
+const transport = createStdioTransport({
+  process: childProcess
+});
+```
+
+### 服务器发送事件 (SSE)
+
+SSE 传输支持基于 HTTP 的远程通信:
+
+```typescript
+import { createSseTransport } from "@mcp/sdk";
+
+const transport = createSseTransport({
+  url: "https://example.com/mcp"
+});
+```
+
+## 实现传输
+
+自定义传输必须实现以下接口:
+
+```typescript
+interface Transport {
+  // 发送请求并等待响应
+  request(method: string, params?: any): Promise<any>;
+  
+  // 发送单向通知
+  notify(method: string, params?: any): Promise<void>;
+  
+  // 设置请求处理程序
+  onRequest(handler: RequestHandler): void;
+  
+  // 设置通知处理程序
+  onNotification(handler: NotificationHandler): void;
+  
+  // 清理资源
+  dispose(): Promise<void>;
+}
+```
+
+## 最佳实践
+
+### 传输选择
+
+1. **本地通信**
+   - 使用 stdio 传输
+   - 适用于进程间通信
+   - 简单且高效
+
+2. **远程通信**
+   - 使用 SSE 传输
+   - 支持 HTTP/HTTPS
+   - 处理网络问题
+
+### 消息处理
+
+1. **请求处理**
+   - 验证消息格式
+   - 处理超时
+   - 实现重试逻辑
+   - 维护请求上下文
+
+2. **错误处理**
+   - 使用标准错误代码
+   - 提供有用的错误消息
+   - 处理连接错误
+   - 实现优雅降级
+
+3. **性能考虑**
+   - 实现消息缓冲
+   - 处理背压
+   - 监控延迟
+   - 优化消息大小
+
+## 安全考虑
+
+### 传输安全
+- 使用 TLS 进行网络传输
+- 加密敏感数据
+- 验证消息完整性
+- 实现消息大小限制
+- 净化输入数据
+
+### 网络安全
+- 实现速率限制
+- 使用适当的超时
+- 处理拒绝服务场景
+- 监控异常模式
+- 实现适当的防火墙规则
+
+## 调试传输
+
+调试传输问题的提示:
+
+1. 启用调试日志
+2. 监控消息流
+3. 检查连接状态
+4. 验证消息格式
+5. 测试错误场景
+6. 使用网络分析工具
+7. 实现健康检查
+8. 监控资源使用
+9. 测试边缘情况
+10. 使用适当的错误跟踪 

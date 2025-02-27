@@ -1,0 +1,164 @@
+---
+title: Inspector
+description: 深入了解如何使用 MCP Inspector 测试和调试 Model Context Protocol 服务器
+---
+
+[MCP Inspector](https://github.com/modelcontextprotocol/inspector) 是一个用于测试和调试 MCP 服务器的交互式开发者工具。虽然[调试指南](/docs/tools/debugging)将 Inspector 作为整体调试工具包的一部分进行了介绍,但本文档提供了更详细的探索。
+
+## 入门
+
+### 安装和基本使用
+
+1. **安装**
+   ```bash
+   npm install -g @modelcontextprotocol/inspector
+   ```
+
+2. **启动 Inspector**
+   ```bash
+   mcp-inspector
+   ```
+
+### 连接到服务器
+
+使用以下命令连接到 MCP 服务器:
+
+```bash
+# 使用 stdio 传输
+mcp-inspector connect stdio --command "python server.py"
+
+# 使用 SSE 传输
+mcp-inspector connect sse --url http://localhost:3000/mcp
+```
+
+## 功能
+
+### 服务器信息
+
+查看服务器详情:
+```bash
+# 显示服务器信息
+info
+
+# 列出可用功能
+capabilities
+```
+
+### 资源管理
+
+探索和读取资源:
+```bash
+# 列出资源
+resources list
+
+# 读取特定资源
+resources read <uri>
+
+# 监视资源变化
+resources watch <uri>
+```
+
+### 工具操作
+
+使用服务器工具:
+```bash
+# 列出可用工具
+tools list
+
+# 调用工具
+tools call <name> [参数]
+
+# 显示工具详情
+tools info <name>
+```
+
+### 提示管理
+
+处理提示模板:
+```bash
+# 列出提示
+prompts list
+
+# 执行提示
+prompts execute <name> [参数]
+```
+
+## 高级用法
+
+### 脚本模式
+
+Inspector 支持脚本模式进行自动化测试:
+
+```bash
+mcp-inspector --script test.js
+```
+
+示例脚本:
+```javascript
+async function test(inspector) {
+  // 连接到服务器
+  await inspector.connect("stdio", {
+    command: "python server.py"
+  });
+
+  // 列出资源
+  const resources = await inspector.resources.list();
+  console.log("可用资源:", resources);
+
+  // 调用工具
+  const result = await inspector.tools.call("calculator", {
+    operation: "add",
+    a: 5,
+    b: 3
+  });
+  console.log("计算结果:", result);
+}
+```
+
+### 配置文件
+
+创建 `.mcpinspectorrc.json` 配置文件:
+
+```json
+{
+  "defaultConnection": {
+    "type": "stdio",
+    "command": "python server.py"
+  },
+  "logLevel": "debug",
+  "timeout": 5000
+}
+```
+
+## 故障排除
+
+### 常见问题
+
+1. **连接错误**
+   - 检查服务器是否运行
+   - 验证连接 URL/命令
+   - 检查网络设置
+
+2. **工具调用失败**
+   - 验证参数格式
+   - 检查错误消息
+   - 确认工具权限
+
+### 调试提示
+
+- 使用 `--debug` 标志启用详细日志记录
+- 检查服务器日志以获取更多信息
+- 使用 `--timeout` 增加超时时间
+- 验证服务器配置
+
+## 相关资源
+
+<CardGroup cols={2}>
+    <Card
+        title="调试指南"
+        icon="bug"
+        href="/docs/tools/debugging"
+    >
+        了解更广泛的调试策略
+    </Card>
+</CardGroup> 

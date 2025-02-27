@@ -1,0 +1,194 @@
+---
+title: MCP 服务器
+description: 学习如何实现和配置 Model Context Protocol (MCP) 服务器
+---
+
+## 概述
+
+MCP 服务器是 Model Context Protocol (MCP) 架构中的基础组件，为客户端提供工具、资源和功能。它实现了协议的服务器端部分，负责：
+
+- 暴露客户端可以发现和执行的工具
+- 使用基于 URI 的访问模式管理资源
+- 提供提示模板并处理提示请求
+- 支持与客户端的能力协商
+- 实现服务器端协议操作
+- 管理并发客户端连接
+- 提供结构化日志和通知
+
+服务器支持同步和异步 API，允许在不同的应用场景中灵活集成。
+
+<Tabs>
+  <Tab title="同步 API">
+```java
+// 使用自定义配置创建服务器
+McpSyncServer syncServer = McpServer.sync(transport)
+    .serverInfo("my-server", "1.0.0")
+    .capabilities(ServerCapabilities.builder()
+        .resources(true)     // 启用资源支持
+        .tools(true)         // 启用工具支持
+        .prompts(true)       // 启用提示支持
+        .logging()           // 启用日志支持
+        .build())
+    .build();
+
+// 初始化服务器
+syncServer.initialize();
+
+// 注册工具、资源和提示
+syncServer.addTool(syncToolRegistration);
+syncServer.addResource(syncResourceRegistration);
+syncServer.addPrompt(syncPromptRegistration);
+
+// 发送日志通知
+syncServer.loggingNotification(LoggingMessageNotification.builder()
+    .level(LoggingLevel.INFO)
+    .logger("custom-logger")
+    .data("服务器已初始化")
+    .build());
+
+// 完成后关闭服务器
+syncServer.close();
+```
+  </Tab>
+
+  <Tab title="异步 API">
+```java
+// 使用自定义配置创建异步服务器
+McpAsyncServer asyncServer = McpServer.async(transport)
+    .serverInfo("my-server", "1.0.0")
+    .capabilities(ServerCapabilities.builder()
+        .resources(true)
+        .tools(true)
+        .prompts(true)
+        .logging()
+        .build())
+    .build();
+
+// 初始化服务器
+asyncServer.initialize()
+    .doOnSuccess(v -> logger.info("服务器已初始化"))
+    .subscribe();
+
+// 注册工具、资源和提示
+asyncServer.addTool(asyncToolRegistration);
+asyncServer.addResource(asyncResourceRegistration);
+asyncServer.addPrompt(asyncPromptRegistration);
+
+// 发送日志通知
+asyncServer.loggingNotification(LoggingMessageNotification.builder()
+    .level(LoggingLevel.INFO)
+    .logger("custom-logger")
+    .data("服务器已初始化")
+    .build())
+    .subscribe();
+```
+  </Tab>
+</Tabs>
+
+### 工具注册
+
+<Tabs>
+  <Tab title="同步">
+```java
+// 同步工具注册
+var syncToolRegistration = new McpServerFeatures.SyncToolRegistration(
+    new Tool("calculator", "执行基本计算", 
+        new JsonSchemaObject()
+            .addProperty("operation", new JsonSchemaString())
+            .addProperty("a", new JsonSchemaNumber())
+            .addProperty("b", new JsonSchemaNumber())
+    ),
+    request -> {
+        // 工具实现
+        return new CallToolResult(result);
+    }
+);
+```
+  </Tab>
+
+  <Tab title="异步">
+```java
+// 异步工具注册
+var asyncToolRegistration = new McpServerFeatures.AsyncToolRegistration(
+    new Tool("calculator", "执行基本计算", 
+        new JsonSchemaObject()
+            .addProperty("operation", new JsonSchemaString())
+            .addProperty("a", new JsonSchemaNumber())
+            .addProperty("b", new JsonSchemaNumber())
+    ),
+    request -> {
+        // 工具实现
+        return Mono.just(new CallToolResult(result));
+    }
+);
+```
+  </Tab>
+</Tabs>
+
+### 资源注册
+
+<Tabs>
+  <Tab title="同步">
+```java
+// 同步资源注册
+var syncResourceRegistration = new McpServerFeatures.SyncResourceRegistration(
+    new Resource("custom://resource", "名称", "描述", "mime-type", null),
+    request -> {
+        // 资源读取实现
+        return new ReadResourceResult(contents);
+    }
+);
+```
+  </Tab>
+
+  <Tab title="异步">
+```java
+// 异步资源注册
+var asyncResourceRegistration = new McpServerFeatures.AsyncResourceRegistration(
+    new Resource("custom://resource", "名称", "描述", "mime-type", null),
+    request -> {
+        // 资源读取实现
+        return Mono.just(new ReadResourceResult(contents));
+    }
+);
+```
+  </Tab>
+</Tabs>
+
+### 提示注册
+
+<Tabs>
+  <Tab title="同步">
+```java
+// 同步提示注册
+var syncPromptRegistration = new McpServerFeatures.SyncPromptRegistration(
+    new Prompt("greeting", "描述", List.of(
+        new PromptArgument("name", "描述", true)
+    )),
+    request -> {
+        // 提示实现
+        return new GetPromptResult(description, messages);
+    }
+);
+```
+  </Tab>
+
+  <Tab title="异步">
+```java
+// 异步提示注册
+var asyncPromptRegistration = new McpServerFeatures.AsyncPromptRegistration(
+    new Prompt("greeting", "描述", List.of(
+        new PromptArgument("name", "描述", true)
+    )),
+    request -> {
+        // 提示实现
+        return Mono.just(new GetPromptResult(description, messages));
+    }
+);
+```
+  </Tab>
+</Tabs>
+
+## 错误处理
+
+SDK 通过 McpError 类提供全面的错误处理，涵盖协议兼容性、传输通信、JSON-RPC 消息传递、工具执行、资源管理、提示处理、超时和连接问题。这种统一的错误处理方法确保了同步和异步操作中的错误管理一致性和可靠性。 
