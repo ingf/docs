@@ -1,0 +1,104 @@
+---
+title: "用户指南"
+description: "开始使用预构建的 MCP 服务器"
+---
+
+本指南将帮助您开始使用预构建的 MCP 服务器。我们将使用 Claude Desktop 作为示例客户端，但这些概念适用于任何 MCP 客户端。
+
+## 安装服务器
+
+首先安装一个预构建的 MCP 服务器：
+
+```bash
+# 安装文件系统服务器
+npm install -g @modelcontextprotocol/server-filesystem
+
+# 安装 Web 浏览器服务器
+npm install -g @modelcontextprotocol/server-browser
+
+# 安装全功能服务器
+npm install -g @modelcontextprotocol/server-everything
+```
+
+## 启动服务器
+
+启动服务器并指定要共享的目录：
+
+```bash
+# 共享特定目录
+npx @modelcontextprotocol/server-filesystem ~/Documents
+
+# 共享当前目录
+npx @modelcontextprotocol/server-filesystem .
+
+# 启动浏览器服务器
+npx @modelcontextprotocol/server-browser
+
+# 启动全功能服务器
+npx @modelcontextprotocol/server-everything
+```
+
+## 连接客户端
+
+1. 打开 Claude Desktop
+2. 点击设置图标
+3. 选择 "MCP 服务器"
+4. 点击 "添加服务器"
+5. 输入服务器命令：
+   ```bash
+   npx @modelcontextprotocol/server-filesystem ~/Documents
+   ```
+6. 点击 "连接"
+
+## 使用服务器
+
+一旦连接成功：
+
+1. Claude 可以访问您共享目录中的文件
+2. 您可以要求 Claude 读取和分析文件
+3. Claude 可以使用服务器提供的工具
+4. 您可以使用预定义的提示模板
+
+示例提示：
+```
+请读取 ~/Documents/report.pdf 并总结其内容。
+```
+
+## 故障排除
+
+如果遇到问题：
+
+1. 确保服务器正在运行
+2. 检查共享目录的权限
+3. 验证服务器命令是否正确
+4. 查看服务器日志输出
+5. 尝试重新启动服务器和客户端
+
+## 安全注意事项
+
+使用 MCP 服务器时：
+
+- 仅共享必要的目录
+- 避免共享敏感文件
+- 定期检查访问日志
+- 保持服务器更新
+- 使用受信任的客户端
+
+## 下一步
+
+<CardGroup cols={2}>
+  <Card
+    title="服务器开发者"
+    icon="server"
+    href="/quickstart/server"
+  >
+    学习如何构建自己的 MCP 服务器
+  </Card>
+  <Card
+    title="客户端开发者"
+    icon="desktop"
+    href="/quickstart/client"
+  >
+    学习如何构建自己的 MCP 客户端
+  </Card>
+</CardGroup> 
