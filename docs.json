@@ -11,50 +11,49 @@
   "navigation": {
     "tabs": [
       {
-        "tab": "Documentation",
         "groups": [
           {
             "group": "Get Started",
             "pages": [
-              "introduction",
+              "en/introduction",
               {
                 "group": "Quickstart",
                 "pages": [
-                  "quickstart/server",
-                  "quickstart/client",
-                  "quickstart/user"
+                  "en/quickstart/server",
+                  "en/quickstart/client",
+                  "en/quickstart/user"
                 ]
               },
-              "examples",
-              "clients"
+              "en/examples",
+              "en/clients"
             ]
           },
           {
             "group": "Tutorials",
             "pages": [
-              "tutorials/building-mcp-with-llms",
-              "docs/tools/debugging",
-              "docs/tools/inspector"
+              "en/tutorials/building-mcp-with-llms",
+              "en/docs/tools/debugging",
+              "en/docs/tools/inspector"
             ]
           },
           {
             "group": "Concepts",
             "pages": [
-              "docs/concepts/architecture",
-              "docs/concepts/resources",
-              "docs/concepts/prompts",
-              "docs/concepts/tools",
-              "docs/concepts/sampling",
-              "docs/concepts/roots",
-              "docs/concepts/transports"
+              "en/docs/concepts/architecture",
+              "en/docs/concepts/resources",
+              "en/docs/concepts/prompts",
+              "en/docs/concepts/tools",
+              "en/docs/concepts/sampling",
+              "en/docs/concepts/roots",
+              "en/docs/concepts/transports"
             ]
           },
           {
             "group": "Development",
             "pages": [
-              "development/updates",
-              "development/roadmap",
-              "development/contributing"
+              "en/development/updates",
+              "en/development/roadmap",
+              "en/development/contributing"
             ]
           }
         ]
@@ -66,9 +65,9 @@
           {
             "group": "Java",
             "pages": [
-              "sdk/java/mcp-overview",
-              "sdk/java/mcp-client",
-              "sdk/java/mcp-server"
+              "en/sdk/java/mcp-overview",
+              "en/sdk/java/mcp-client",
+              "en/sdk/java/mcp-server"
             ]
           }
         ]
@@ -130,11 +129,11 @@
   "redirects": [
     {
       "source": "/tutorials/building-a-client",
-      "destination": "/quickstart/client"
+      "destination": "/en/quickstart/client"
     },
     {
       "source": "/quickstart",
-      "destination": "/quickstart/server"
+      "destination": "/en/quickstart/server"
     }
   ]
 }
