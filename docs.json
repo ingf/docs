@@ -40,53 +40,6 @@
     },
     "languages": [
       {
-        "language": "en",
-        "groups": [
-          {
-            "group": "Getting Started",
-            "pages": [
-              "en/introduction",
-              "en/quickstart/client",
-              "en/quickstart/server",
-              "en/quickstart/user"
-            ]
-          },
-          {
-            "group": "Core Concepts",
-            "pages": [
-              "en/docs/concepts/architecture",
-              "en/docs/concepts/resources",
-              "en/docs/concepts/tools",
-              "en/docs/concepts/prompts",
-              "en/docs/concepts/sampling",
-              "en/docs/concepts/roots",
-              "en/docs/concepts/transports"
-            ]
-          },
-          {
-            "group": "SDK Documentation",
-            "pages": [
-              {
-                "group": "Java SDK",
-                "pages": [
-                  "en/sdk/java/mcp-overview",
-                  "en/sdk/java/mcp-client",
-                  "en/sdk/java/mcp-server"
-                ]
-              }
-            ]
-          },
-          {
-            "group": "Development",
-            "pages": [
-              "en/development/contributing",
-              "en/development/roadmap",
-              "en/development/updates"
-            ]
-          }
-        ]
-      },
-      {
         "language": "zh-Hans",
         "groups": [
           {
@@ -129,6 +82,53 @@
               "zh-Hans/development/contributing",
               "zh-Hans/development/roadmap",
               "zh-Hans/development/updates"
+            ]
+          }
+        ]
+      },
+      {
+        "language": "en",
+        "groups": [
+          {
+            "group": "Getting Started",
+            "pages": [
+              "en/introduction",
+              "en/quickstart/client",
+              "en/quickstart/server",
+              "en/quickstart/user"
+            ]
+          },
+          {
+            "group": "Core Concepts",
+            "pages": [
+              "en/docs/concepts/architecture",
+              "en/docs/concepts/resources",
+              "en/docs/concepts/tools",
+              "en/docs/concepts/prompts",
+              "en/docs/concepts/sampling",
+              "en/docs/concepts/roots",
+              "en/docs/concepts/transports"
+            ]
+          },
+          {
+            "group": "SDK Documentation",
+            "pages": [
+              {
+                "group": "Java SDK",
+                "pages": [
+                  "en/sdk/java/mcp-overview",
+                  "en/sdk/java/mcp-client",
+                  "en/sdk/java/mcp-server"
+                ]
+              }
+            ]
+          },
+          {
+            "group": "Development",
+            "pages": [
+              "en/development/contributing",
+              "en/development/roadmap",
+              "en/development/updates"
             ]
           }
         ]
