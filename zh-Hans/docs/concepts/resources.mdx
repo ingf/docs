@@ -1,175 +1,250 @@
 ---
 title: "资源"
-description: "从您的服务器向 LLMs 暴露数据和内容"
+description: "从服务器向 LLM 公开数据和内容"
 ---
 
-资源是 Model Context Protocol (MCP) 中的一个核心原语，允许服务器暴露可以被客户端读取并用作 LLM 交互上下文的数据和内容。
+资源是模型上下文协议（MCP）中的核心原语，允许服务器公开可被客户端读取并用作 LLM 交互上下文的数据和内容。
 
 <Note>
-  资源被设计为**应用程序控制**，这意味着客户端应用程序可以决定如何以及何时使用它们。
+  资源被设计为**应用程序控制**的，这意味着客户端应用程序可以决定如何以及何时使用它们。
+  不同的 MCP 客户端可能会以不同方式处理资源。例如：
+  - Claude Desktop 目前要求用户在使用资源前明确选择它们
+  - 其他客户端可能基于启发式算法自动选择资源
+  - 某些实现甚至可能允许 AI 模型自行决定使用哪些资源
+
+  在实现资源支持时，服务器作者应准备好处理任何这些交互模式。为了自动向模型公开数据，服务器作者应使用**模型控制**的原语，如[工具](./tools)。
 </Note>
 
-## 资源是什么？
+## 概述
 
-资源代表服务器可以提供给客户端的任何数据或内容。这可以包括：
+资源代表 MCP 服务器想要提供给客户端的任何类型的数据。这可以包括：
 
-- 文件系统中的文件
-- 数据库中的记录
+- 文件内容
+- 数据库记录
 - API 响应
-- 生成的内容
-- 流式数据
-- 二进制数据
+- 实时系统数据
+- 截图和图像
+- 日志文件
+- 等等
 
-每个资源都有一个唯一的 URI 和相关的元数据，如 MIME 类型和大小。
+每个资源都由唯一的 URI 标识，可以包含文本或二进制数据。
 
 ## 资源 URI
 
-资源通过 URI 模板进行标识和访问。URI 模板提供了一种灵活的方式来定义资源位置和参数：
+资源使用以下格式的 URI 进行标识：
 
-```json
-{
-  "uri": "file://{path}",
-  "name": "文件系统",
-  "description": "访问本地文件系统",
-  "mimeType": "*/*"
-}
+```
+[protocol]://[host]/[path]
 ```
 
-客户端通过提供必要的参数来解析这些模板：
+例如：
+- `file:///home/user/documents/report.pdf`
+- `postgres://database/customers/schema`
+- `screen://localhost/display1`
 
-```json
-{
-  "uri": "file:///path/to/document.txt",
-  "parameters": {
-    "path": "/path/to/document.txt"
-  }
-}
-```
+协议和路径结构由 MCP 服务器实现定义。服务器可以定义自己的自定义 URI 方案。
+
+## 资源类型
+
+资源可以包含两种类型的内容：
+
+### 文本资源
+
+文本资源包含 UTF-8 编码的文本数据。这些适用于：
+- 源代码
+- 配置文件
+- 日志文件
+- JSON/XML 数据
+- 纯文本
+
+### 二进制资源
+
+二进制资源包含以 base64 编码的原始二进制数据。这些适用于：
+- 图像
+- PDF
+- 音频文件
+- 视频文件
+- 其他非文本格式
 
 ## 资源发现
 
-服务器通过 `listResources` 方法公开可用的资源。这返回资源定义的列表，包括：
+客户端可以通过两种主要方法发现可用资源：
 
-- URI 模板
-- 名称和描述
-- MIME 类型
-- 参数模式
+### 直接资源
 
-客户端可以使用此信息来发现可用资源并了解如何访问它们。
+服务器通过 `resources/list` 端点公开具体资源列表。每个资源包括：
 
-## 读取资源
-
-一旦发现了资源，客户端就可以使用 `readResource` 方法检索其内容：
-
-<CodeGroup>
-```typescript TypeScript
-const result = await client.readResource({
-  uri: "file:///path/to/document.txt"
-});
-
-console.log(result.contents); // 文件内容
-```
-
-```python Python
-result = client.read_resource(
-    uri="file:///path/to/document.txt"
-)
-
-print(result.contents) # 文件内容
-```
-</CodeGroup>
-
-资源内容作为字符串或二进制数据返回，具体取决于资源类型。
-
-## 资源变更通知
-
-服务器可以通知客户端资源列表的变更：
-
-```json
+```typescript
 {
-  "jsonrpc": "2.0",
-  "method": "resources/changed",
-  "params": {
-    "added": [
-      {
-        "uri": "file://{path}",
-        "name": "新资源"
-      }
-    ],
-    "removed": [
-      "old-resource://"
-    ]
-  }
+  uri: string;           // 资源的唯一标识符
+  name: string;          // 人类可读的名称
+  description?: string;  // 可选描述
+  mimeType?: string;     // 可选 MIME 类型
 }
 ```
 
-这使客户端能够保持其资源视图的最新状态。
+### 资源模板
 
-## 实现资源
+对于动态资源，服务器可以公开[URI 模板](https://datatracker.ietf.org/doc/html/rfc6570)，客户端可以使用这些模板构建有效的资源 URI：
 
-要在您的服务器中实现资源支持：
-
-1. 定义资源 URI 模板
-2. 实现资源发现
-3. 处理资源读取请求
-4. 发送变更通知（可选）
-
-示例实现：
-
-<CodeGroup>
-```typescript TypeScript
-const fileResource = {
-  uri: "file://{path}",
-  name: "文件系统",
-  description: "访问本地文件系统",
-  mimeType: "*/*",
-  parameters: {
-    path: { type: "string" }
-  }
-};
-
-server.addResource(fileResource, async (request) => {
-  const contents = await fs.readFile(request.parameters.path);
-  return { contents };
-});
+```typescript
+{
+  uriTemplate: string;   // 遵循 RFC 6570 的 URI 模板
+  name: string;          // 此类型的人类可读名称
+  description?: string;  // 可选描述
+  mimeType?: string;     // 所有匹配资源的可选 MIME 类型
+}
 ```
 
-```python Python
-file_resource = Resource(
-    uri="file://{path}",
-    name="文件系统",
-    description="访问本地文件系统",
-    mime_type="*/*",
-    parameters={"path": {"type": "string"}}
-)
+## 读取资源
 
-@server.resource(file_resource)
-async def handle_file(request):
-    contents = await read_file(request.parameters["path"])
-    return ResourceResponse(contents=contents)
+要读取资源，客户端使用资源 URI 发出 `resources/read` 请求。
+
+服务器响应资源内容列表：
+
+```typescript
+{
+  contents: [
+    {
+      uri: string;        // 资源的 URI
+      mimeType?: string;  // 可选 MIME 类型
+
+      // 以下二选一：
+      text?: string;      // 用于文本资源
+      blob?: string;      // 用于二进制资源（base64 编码）
+    }
+  ]
+}
 ```
-</CodeGroup>
+
+<Tip>
+  服务器可能会响应一个 `resources/read` 请求返回多个资源。例如，当读取目录时，可以用来返回目录内的文件列表。
+</Tip>
+
+## 资源更新
+
+MCP 通过两种机制支持资源的实时更新：
+
+### 列表变更
+
+服务器可以通过 `notifications/resources/list_changed` 通知客户端其可用资源列表何时发生变化。
+
+### 内容变更
+
+客户端可以订阅特定资源的更新：
+
+1. 客户端发送带有资源 URI 的 `resources/subscribe`
+2. 当资源变化时，服务器发送 `notifications/resources/updated`
+3. 客户端可以使用 `resources/read` 获取最新内容
+4. 客户端可以使用 `resources/unsubscribe` 取消订阅
+
+## 实现示例
+
+以下是在 MCP 服务器中实现资源支持的简单示例：
+
+<Tabs>
+  <Tab title="TypeScript">
+    ```typescript
+    const server = new Server({
+      name: "example-server",
+      version: "1.0.0"
+    }, {
+      capabilities: {
+        resources: {}
+      }
+    });
+
+    // List available resources
+    server.setRequestHandler(ListResourcesRequestSchema, async () => {
+      return {
+        resources: [
+          {
+            uri: "file:///logs/app.log",
+            name: "Application Logs",
+            mimeType: "text/plain"
+          }
+        ]
+      };
+    });
+
+    // Read resource contents
+    server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
+      const uri = request.params.uri;
+
+      if (uri === "file:///logs/app.log") {
+        const logContents = await readLogFile();
+        return {
+          contents: [
+            {
+              uri,
+              mimeType: "text/plain",
+              text: logContents
+            }
+          ]
+        };
+      }
+
+      throw new Error("Resource not found");
+    });
+    ```
+  </Tab>
+  <Tab title="Python">
+    ```python
+    app = Server("example-server")
+
+    @app.list_resources()
+    async def list_resources() -> list[types.Resource]:
+        return [
+            types.Resource(
+                uri="file:///logs/app.log",
+                name="Application Logs",
+                mimeType="text/plain"
+            )
+        ]
+
+    @app.read_resource()
+    async def read_resource(uri: AnyUrl) -> str:
+        if str(uri) == "file:///logs/app.log":
+            log_contents = await read_log_file()
+            return log_contents
+
+        raise ValueError("Resource not found")
+
+    # Start server
+    async with stdio_server() as streams:
+        await app.run(
+            streams[0],
+            streams[1],
+            app.create_initialization_options()
+        )
+    ```
+  </Tab>
+</Tabs>
 
 ## 最佳实践
 
-实现资源时要考虑：
+在实现资源支持时：
 
-- 仔细验证资源参数
-- 实现适当的错误处理
-- 考虑性能和缓存
-- 正确设置 MIME 类型
-- 处理大文件
-- 实现超时
-- 限制资源大小
-- 保护敏感数据
+1. 使用清晰、描述性的资源名称和 URI
+2. 包含有用的描述以指导 LLM 理解
+3. 在已知时设置适当的 MIME 类型
+4. 为动态内容实现资源模板
+5. 对频繁变化的资源使用订阅
+6. 使用清晰的错误消息优雅地处理错误
+7. 考虑对大型资源列表进行分页
+8. 在适当时缓存资源内容
+9. 在处理前验证 URI
+10. 记录您的自定义 URI 方案
 
 ## 安全考虑
 
-在实现资源时要注意以下安全方面：
+在公开资源时：
 
+- 验证所有资源 URI
+- 实现适当的访问控制
 - 净化文件路径以防止目录遍历
 - 谨慎处理二进制数据
-- 考虑资源读取的速率限制
+- 考虑对资源读取进行速率限制
 - 审计资源访问
 - 加密传输中的敏感数据
 - 验证 MIME 类型

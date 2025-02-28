@@ -1,165 +1,281 @@
 ---
 title: 调试
-description: Model Context Protocol (MCP) 集成的全面调试指南
+description: Model Context Protocol (MCP) 集成调试的综合指南
 ---
 
-在开发 MCP 服务器或将其与应用程序集成时,有效的调试是必不可少的。本指南涵盖了 MCP 生态系统中可用的调试工具和方法。
+在开发MCP服务器或将其与应用程序集成时，有效的调试至关重要。本指南涵盖了MCP生态系统中可用的调试工具和方法。
 
 <Info>
-  本指南适用于 macOS。其他平台的指南即将推出。
+  本指南适用于macOS。其他平台的指南即将推出。
 </Info>
 
 ## 调试工具概述
 
-MCP 提供了几个用于不同层面调试的工具:
+MCP提供了几种用于不同级别调试的工具：
 
-1. **MCP Inspector**
+1. **MCP检查器**
    - 交互式调试界面
    - 直接服务器测试
-   - 查看 [Inspector 指南](/docs/tools/inspector) 了解详情
+   - 详情请参阅[检查器指南](/docs/tools/inspector)
 
-2. **命令行工具**
-   - 快速测试和验证
-   - 自动化测试支持
-   - 持续集成工作流
+2. **Claude桌面开发者工具**
+   - 集成测试
+   - 日志收集
+   - Chrome DevTools集成
 
-3. **SDK 调试工具**
-   - 详细的日志记录
-   - 请求/响应跟踪
-   - 性能分析
+3. **服务器日志记录**
+   - 自定义日志实现
+   - 错误跟踪
+   - 性能监控
+
+## 在Claude桌面中调试
+
+### 检查服务器状态
+
+Claude.app界面提供基本的服务器状态信息：
+
+1. 点击<img src="/images/claude-desktop-mcp-plug-icon.svg" style={{display: 'inline', margin: 0, height: '1.3em'}} />图标查看：
+   - 已连接的服务器
+   - 可用的提示和资源
+
+2. 点击<img src="/images/claude-desktop-mcp-hammer-icon.svg" style={{display: 'inline', margin: 0, height: '1.3em'}} />图标查看：
+   - 提供给模型的工具
+
+### 查看日志
+
+从Claude桌面查看详细的MCP日志：
+
+```bash
+# 实时跟踪日志
+tail -n 20 -F ~/Library/Logs/Claude/mcp*.log
+```
+
+日志捕获：
+- 服务器连接事件
+- 配置问题
+- 运行时错误
+- 消息交换
+
+### 使用Chrome DevTools
+
+在Claude桌面中访问Chrome的开发者工具来调查客户端错误：
+
+1. 创建一个`developer_settings.json`文件，将`allowDevTools`设置为true：
+
+```bash
+echo '{"allowDevTools": true}' > ~/Library/Application\ Support/Claude/developer_settings.json
+```
+
+2. 打开DevTools：`Command-Option-Shift-i`
+
+注意：你会看到两个DevTools窗口：
+- 主内容窗口
+- 应用标题栏窗口
+
+使用Console面板检查客户端错误。
+
+使用Network面板检查：
+- 消息负载
+- 连接时间
 
 ## 常见问题
 
+### 工作目录
+
+在使用MCP服务器与Claude桌面时：
+
+- 通过`claude_desktop_config.json`启动的服务器的工作目录可能未定义（如macOS上的`/`），因为Claude桌面可能从任何位置启动
+- 在配置和`.env`文件中始终使用绝对路径以确保可靠操作
+- 对于通过命令行直接测试服务器，工作目录将是你运行命令的位置
+
+例如在`claude_desktop_config.json`中，使用：
+```json
+{
+  "command": "npx",
+  "args": ["-y", "@modelcontextprotocol/server-filesystem", "/Users/username/data"]
+}
+```
+而不是相对路径，如`./data`
+
+### 环境变量
+
+MCP服务器只会自动继承环境变量的一个子集，如`USER`、`HOME`和`PATH`。
+
+要覆盖默认变量或提供自己的变量，可以在`claude_desktop_config.json`中指定`env`键：
+
+```json
+{
+  "myserver": {
+    "command": "mcp-server-myapp",
+    "env": {
+      "MYAPP_API_KEY": "some_key",
+    }
+  }
+}
+```
+
+### 服务器初始化
+
+常见的初始化问题：
+
+1. **路径问题**
+   - 服务器可执行文件路径不正确
+   - 缺少必需的文件
+   - 权限问题
+   - 尝试为`command`使用绝对路径
+
+2. **配置错误**
+   - 无效的JSON语法
+   - 缺少必需字段
+   - 类型不匹配
+
+3. **环境问题**
+   - 缺少环境变量
+   - 变量值不正确
+   - 权限限制
+
 ### 连接问题
 
-1. **检查清单**
-   - 验证服务器是否正在运行
-   - 确认端口配置
-   - 检查防火墙设置
-   - 验证网络连接
+当服务器无法连接时：
 
-2. **诊断步骤**
-   - 启用详细日志记录
-   - 检查错误消息
-   - 验证配置
-   - 测试基本连接
+1. 检查Claude桌面日志
+2. 验证服务器进程是否正在运行
+3. 使用[检查器](/docs/tools/inspector)进行独立测试
+4. 验证协议兼容性
 
-### 协议错误
+## 实现日志记录
 
-1. **常见原因**
-   - 版本不匹配
-   - 无效的消息格式
-   - 缺少必需字段
-   - 类型错误
+### 服务器端日志记录
 
-2. **解决方法**
-   - 检查协议版本
-   - 验证消息结构
-   - 使用模式验证
-   - 检查数据类型
+在构建使用本地stdio[传输](/docs/concepts/transports)的服务器时，所有记录到stderr（标准错误）的消息都会被主机应用程序（例如Claude桌面）自动捕获。
 
-### 性能问题
+<Warning>
+  本地MCP服务器不应将消息记录到stdout（标准输出），因为这会干扰协议操作。
+</Warning>
 
-1. **识别瓶颈**
-   - 监控响应时间
-   - 检查资源使用
-   - 分析网络延迟
-   - 评估内存使用
+对于所有[传输](/docs/concepts/transports)，你还可以通过发送日志消息通知向客户端提供日志：
 
-2. **优化策略**
-   - 实现缓存
-   - 优化查询
-   - 减少网络往返
-   - 管理资源清理
+<Tabs>
+  <Tab title="Python">
+    ```python
+    server.request_context.session.send_log_message(
+      level="info",
+      data="Server started successfully",
+    )
+    ```
+  </Tab>
+  <Tab title="TypeScript">
+    ```typescript
+    server.sendLoggingMessage({
+      level: "info",
+      data: "Server started successfully",
+    });
+    ```
+  </Tab>
+</Tabs>
 
-## 调试工具
+需要记录的重要事件：
+- 初始化步骤
+- 资源访问
+- 工具执行
+- 错误条件
+- 性能指标
 
-### MCP Inspector
+### 客户端日志记录
 
-1. **基本用法**
-   ```bash
-   npx @modelcontextprotocol/inspector
-   ```
+在客户端应用程序中：
 
-2. **常见命令**
-   ```bash
-   # 连接到服务器
-   inspector connect ws://localhost:8080
+1. 启用调试日志记录
+2. 监控网络流量
+3. 跟踪消息交换
+4. 记录错误状态
 
-   # 列出可用工具
-   inspector tools list
+## 调试工作流程
 
-   # 调用工具
-   inspector tools call <tool-name>
-   ```
+### 开发周期
 
-### 日志记录
+1. 初始开发
+   - 使用[检查器](/docs/tools/inspector)进行基本测试
+   - 实现核心功能
+   - 添加日志点
 
-1. **启用调试日志**
-   ```typescript
-   const server = new Server({
-     debug: true,
-     logLevel: "debug"
-   });
-   ```
+2. 集成测试
+   - 在Claude桌面中测试
+   - 监控日志
+   - 检查错误处理
 
-2. **日志级别**
-   - ERROR: 错误和失败
-   - WARN: 警告和问题
-   - INFO: 一般信息
-   - DEBUG: 详细调试信息
-   - TRACE: 最详细的跟踪
+### 测试更改
+
+要高效测试更改：
+
+- **配置更改**：重启Claude桌面
+- **服务器代码更改**：使用Command-R重新加载
+- **快速迭代**：在开发期间使用[检查器](/docs/tools/inspector)
 
 ## 最佳实践
 
-1. **开发环境**
-   - 使用开发模式
-   - 启用详细日志记录
-   - 实现错误处理
-   - 设置断点
+### 日志策略
 
-2. **测试策略**
-   - 编写单元测试
-   - 执行集成测试
-   - 模拟依赖项
-   - 测试错误情况
+1. **结构化日志记录**
+   - 使用一致的格式
+   - 包含上下文
+   - 添加时间戳
+   - 跟踪请求ID
 
-3. **故障排除**
-   - 系统地隔离问题
-   - 收集相关日志
-   - 复现问题
-   - 记录解决方案
+2. **错误处理**
+   - 记录堆栈跟踪
+   - 包含错误上下文
+   - 跟踪错误模式
+   - 监控恢复
 
-## 报告问题
+3. **性能跟踪**
+   - 记录操作时间
+   - 监控资源使用
+   - 跟踪消息大小
+   - 测量延迟
 
-在报告问题时:
+### 安全考虑
 
-1. **问题描述**
-   - 清晰描述问题
-   - 提供复现步骤
-   - 包含预期行为
-   - 描述实际结果
+调试时：
 
-2. **系统信息**
-   - MCP 版本
-   - 操作系统
-   - 运行时环境
-   - 相关依赖
+1. **敏感数据**
+   - 净化日志
+   - 保护凭证
+   - 掩盖个人信息
+
+2. **访问控制**
+   - 验证权限
+   - 检查身份验证
+   - 监控访问模式
+
+## 获取帮助
+
+遇到问题时：
+
+1. **第一步**
+   - 检查服务器日志
+   - 使用[检查器](/docs/tools/inspector)测试
+   - 审查配置
+   - 验证环境
+
+2. **支持渠道**
+   - GitHub问题
+   - GitHub讨论
 
 3. **提供信息**
    - 日志摘录
    - 配置文件
-   - 复现步骤
+   - 重现步骤
    - 环境详情
 
 ## 下一步
 
 <CardGroup cols={2}>
   <Card
-    title="MCP Inspector"
+    title="MCP检查器"
     icon="magnifying-glass"
     href="/docs/tools/inspector"
   >
-    学习使用 MCP Inspector
+    学习使用MCP检查器
   </Card>
 </CardGroup> 

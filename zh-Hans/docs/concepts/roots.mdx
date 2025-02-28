@@ -1,157 +1,79 @@
 ---
 title: "根目录"
-description: "理解 MCP 中的根目录"
+description: "理解MCP中的根目录概念"
 ---
 
-根目录是 Model Context Protocol (MCP) 中的一个可选功能，允许客户端指定服务器应该关注的数据源。
+根目录（Roots）是MCP中定义服务器可以操作边界的概念。它们为客户端提供了一种方式，用于告知服务器相关资源及其位置。
 
-## 根目录是什么？
+## 什么是根目录？
 
-根目录代表服务器应该监视或索引的数据源位置。这些可以是：
+根目录是客户端建议服务器应该关注的URI。当客户端连接到服务器时，它会声明服务器应该使用哪些根目录。虽然主要用于文件系统路径，但根目录可以是任何有效的URI，包括HTTP URL。
 
-- 文件系统路径
-- 数据库连接字符串
-- API 端点
-- 其他数据源 URI
+例如，根目录可以是：
 
-每个根目录都有一个唯一的 URI 和可选的描述。
-
-## 根目录管理
-
-客户端可以通过以下方法管理根目录：
-
-<CodeGroup>
-```typescript TypeScript
-// 添加根目录
-await client.addRoot({
-  uri: "file:///path/to/docs",
-  description: "文档目录"
-});
-
-// 移除根目录
-await client.removeRoot("file:///path/to/docs");
-
-// 列出根目录
-const roots = await client.listRoots();
+```
+file:///home/user/projects/myapp
+https://api.example.com/v1
 ```
 
-```python Python
-# 添加根目录
-client.add_root(
-    uri="file:///path/to/docs",
-    description="文档目录"
-)
+## 为什么使用根目录？
 
-# 移除根目录
-client.remove_root("file:///path/to/docs")
+根目录有几个重要用途：
 
-# 列出根目录
-roots = client.list_roots()
-```
-</CodeGroup>
+1. **指导**：它们告知服务器相关资源和位置
+2. **清晰**：根目录明确指出哪些资源是工作区的一部分
+3. **组织**：多个根目录让你可以同时处理不同的资源
 
-## 根目录变更通知
+## 根目录如何工作
 
-服务器可以通知客户端根目录列表的变更：
+当客户端支持根目录时，它会：
 
-```json
-{
-  "jsonrpc": "2.0",
-  "method": "roots/changed",
-  "params": {
-    "added": [
-      {
-        "uri": "file:///new/path",
-        "description": "新添加的目录"
-      }
-    ],
-    "removed": [
-      "file:///old/path"
-    ]
-  }
-}
-```
+1. 在连接期间声明`roots`能力
+2. 向服务器提供建议的根目录列表
+3. 当根目录变化时通知服务器（如果支持）
 
-## 根目录配置
+虽然根目录是信息性的，不是严格强制的，但服务器应该：
 
-服务器可以通过配置文件定义默认的根目录：
+1. 尊重提供的根目录
+2. 使用根URI来定位和访问资源
+3. 优先考虑根边界内的操作
+
+## 常见用例
+
+根目录通常用于定义：
+
+- 项目目录
+- 仓库位置
+- API端点
+- 配置位置
+- 资源边界
+
+## 最佳实践
+
+在使用根目录时：
+
+1. 只建议必要的资源
+2. 为根目录使用清晰、描述性的名称
+3. 监控根目录的可访问性
+4. 优雅地处理根目录变化
+
+## 示例
+
+以下是典型MCP客户端如何公开根目录：
 
 ```json
 {
   "roots": [
     {
-      "uri": "file:///data/docs",
-      "description": "主文档存储"
+      "uri": "file:///home/user/projects/frontend",
+      "name": "Frontend Repository"
     },
     {
-      "uri": "api://example.com/data",
-      "description": "API 数据源"
+      "uri": "https://api.example.com/v1",
+      "name": "API Endpoint"
     }
   ]
 }
 ```
 
-这个配置建议服务器同时关注本地仓库和 API 端点，同时保持它们在逻辑上分离。
-
-## 实现根目录支持
-
-要在您的服务器中实现根目录支持：
-
-1. 启用根目录功能：
-
-<CodeGroup>
-```typescript TypeScript
-const server = new McpServer({
-  capabilities: {
-    roots: true
-  }
-});
-```
-
-```python Python
-server = McpServer(
-    capabilities={"roots": True}
-)
-```
-</CodeGroup>
-
-2. 处理根目录事件：
-
-<CodeGroup>
-```typescript TypeScript
-server.on("rootAdded", async (root) => {
-  // 开始监视新的根目录
-  await startWatching(root.uri);
-});
-
-server.on("rootRemoved", async (uri) => {
-  // 停止监视根目录
-  await stopWatching(uri);
-});
-```
-
-```python Python
-@server.on("root_added")
-async def handle_root_added(root):
-    # 开始监视新的根目录
-    await start_watching(root.uri)
-
-@server.on("root_removed")
-async def handle_root_removed(uri):
-    # 停止监视根目录
-    await stop_watching(uri)
-```
-</CodeGroup>
-
-## 最佳实践
-
-实现根目录支持时要考虑：
-
-- 验证根目录 URI
-- 实现适当的错误处理
-- 管理监视器资源
-- 处理重复的根目录
-- 实现根目录访问控制
-- 考虑性能影响
-- 处理根目录不可用的情况
-- 提供有意义的错误消息 
+这个配置建议服务器同时关注本地仓库和API端点，同时保持它们在逻辑上分离 
