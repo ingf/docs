@@ -1,0 +1,239 @@
+---
+title: "範例用戶端"
+description: "支援 MCP 整合的應用程式列表"
+---
+
+此頁面概述支援模型上下文協定 (MCP) 的應用程式。每個用戶端可能支援不同的 MCP 功能，從而實現與 MCP 伺服器不同程度的整合。
+
+## 功能支援矩陣
+
+| 用戶端                                      | [資源] | [提示] | [工具] | [取樣] | 根目錄 | 備註                                                                        |
+|---------------------------------------------|--------|--------|--------|--------|--------|-----------------------------------------------------------------------------|
+| [Claude Desktop App][Claude]                | ✅     | ✅     | ✅     | ❌     | ❌    | 完全支援所有 MCP 功能                                                           |
+| [5ire][5ire]                                | ❌     | ❌     | ✅     | ❌     | ❌    | 支援工具。                                                                  |
+| [BeeAI Framework][BeeAI Framework]          | ❌     | ❌     | ✅     | ❌     | ❌    | 在代理工作流程中支援工具。                                                      |
+| [Cline][Cline]                              | ✅     | ❌     | ✅     | ❌     | ❌    | 支援工具和資源。                                                                |
+| [Continue][Continue]                        | ✅     | ✅     | ✅     | ❌     | ❌    | 完全支援所有 MCP 功能                                                           |
+| [Cursor][Cursor]                            | ❌     | ❌     | ✅     | ❌     | ❌    | 支援工具。                                                                  |
+| [Emacs Mcp][Mcp.el]                         | ❌     | ❌     | ✅     | ❌     | ❌    | 在 Emacs 中支援工具。                                                          |
+| [Firebase Genkit][Genkit]                   | ⚠️     | ✅     | ✅     | ❌     | ❌    | 支援透過工具進行資源列表和查找。                                                    |
+| [GenAIScript][GenAIScript]                  | ❌     | ❌     | ✅     | ❌     | ❌    | 支援工具。                                                                  |
+| [Goose][Goose]                              | ❌     | ❌     | ✅     | ❌     | ❌    | 支援工具。                                                                  |
+| [LibreChat][LibreChat]                      | ❌     | ❌     | ✅     | ❌     | ❌    | 支援代理的工具                                                                |
+| [mcp-agent][mcp-agent]                      | ❌     | ❌     | ✅     | ⚠️     | ❌    | 支援工具、伺服器連線管理和代理工作流程。                                                |
+| [Roo Code][Roo Code]                        | ✅     | ❌     | ✅     | ❌     | ❌    | 支援工具和資源。                                                                |
+| [Sourcegraph Cody][Cody]                    | ✅     | ❌     | ❌     | ❌     | ❌    | 透過 OpenCTX 支援資源                                                            |
+| [Superinterface][Superinterface]            | ❌     | ❌     | ✅     | ❌     | ❌    | 支援工具                                                                    |
+| [TheiaAI/TheiaIDE][TheiaAI/TheiaIDE]        | ❌     | ❌     | ✅     | ❌     | ❌    | 在 Theia AI 和 AI 驅動的 Theia IDE 中支援代理的工具                                     |
+| [Windsurf Editor][Windsurf]                 | ❌     | ❌     | ✅     | ❌     | ❌    | 透過 AI Flow 支援協作開發的工具。                                                    |
+| [Zed][Zed]                                  | ❌     | ✅     | ❌     | ❌     | ❌    | 提示顯示為斜線命令                                                               |
+| [OpenSumi][OpenSumi]                        | ❌     | ❌     | ✅     | ❌     | ❌    | 在 OpenSumi 中支援工具                                                          |
+
+[Claude]: https://claude.ai/download
+[Cursor]: https://cursor.com
+[Zed]: https://zed.dev
+[Cody]: https://sourcegraph.com/cody
+[Genkit]: https://github.com/firebase/genkit
+[Continue]: https://github.com/continuedev/continue
+[GenAIScript]: https://microsoft.github.io/genaiscript/reference/scripts/mcp-tools/
+[Cline]: https://github.com/cline/cline
+[LibreChat]: https://github.com/danny-avila/LibreChat
+[TheiaAI/TheiaIDE]: https://eclipsesource.com/blogs/2024/12/19/theia-ide-and-theia-ai-support-mcp/
+[Superinterface]: https://superinterface.ai
+[5ire]: https://github.com/nanbingxyz/5ire
+[BeeAI Framework]: https://i-am-bee.github.io/beeai-framework
+[mcp-agent]: https://github.com/lastmile-ai/mcp-agent
+[Mcp.el]: https://github.com/lizqwerscott/mcp.el
+[Roo Code]: https://roocode.com
+[Goose]: https://block.github.io/goose/docs/goose-architecture/#interoperability-with-extensions
+[Windsurf]: https://codeium.com/windsurf
+
+[資源]: https://modelcontextprotocol.io/docs/concepts/resources
+[提示]: https://modelcontextprotocol.io/docs/concepts/prompts
+[工具]: https://modelcontextprotocol.io/docs/concepts/tools
+[取樣]: https://modelcontextprotocol.io/docs/concepts/sampling
+
+## 用戶端詳細資訊
+
+### Claude Desktop App
+Claude 桌面應用程式提供對 MCP 的全面支援，實現與本地工具和資料來源的深度整合。
+
+**主要功能：**
+- 完全支援資源，允許附加本地檔案和資料
+- 支援提示範本
+- 工具整合，用於執行命令和腳本
+- 本地伺服器連線，以增強隱私和安全性
+
+> ⓘ 注意：Claude.ai 網頁應用程式目前不支援 MCP。MCP 功能僅在桌面應用程式中可用。
+
+### 5ire
+[5ire](https://github.com/nanbingxyz/5ire) 是一個開源跨平台桌面 AI 助理，透過 MCP 伺服器支援工具。
+
+**主要功能：**
+- 內建 MCP 伺服器可以快速啟用和停用。
+- 用戶可以透過修改設定檔來新增更多伺服器。
+- 它是開源且使用者友善的，適合初學者。
+- 未來對 MCP 的支援將持續改進。
+
+### BeeAI Framework
+[BeeAI Framework](https://i-am-bee.github.io/beeai-framework) 是一個開源框架，用於大規模建構、部署和服務強大的代理工作流程。該框架包含 **MCP 工具**，這是一個原生功能，簡化了將 MCP 伺服器整合到代理工作流程中的過程。
+
+**主要功能：**
+- 將 MCP 工具無縫整合到代理工作流程中。
+- 從連線的 MCP 用戶端快速實例化框架原生工具。
+- 計劃未來支援代理 MCP 功能。
+
+**瞭解更多：**
+- [在代理工作流程中使用 MCP 工具的範例](https://i-am-bee.github.io/beeai-framework/#/typescript/tools?id=using-the-mcptool-class)
+
+### Cline
+[Cline](https://github.com/cline/cline) 是一個 VS Code 中的自主編碼代理，可以編輯檔案、執行命令、使用瀏覽器等等——每一步都需要您的許可。
+
+**主要功能：**
+- 透過自然語言建立和新增工具（例如「新增一個搜尋網路的工具」）
+- 透過 `~/Documents/Cline/MCP` 目錄與他人分享 Cline 建立的自訂 MCP 伺服器
+- 顯示已設定的 MCP 伺服器及其工具、資源和任何錯誤日誌
+
+### Continue
+[Continue](https://github.com/continuedev/continue) 是一個開源 AI 程式碼助理，內建支援所有 MCP 功能。
+
+**主要功能**
+- 輸入「@」以提及 MCP 資源
+- 提示範本顯示為斜線命令
+- 直接在聊天中使用內建工具和 MCP 工具
+- 支援 VS Code 和 JetBrains IDE，以及任何 LLM
+
+### Cursor
+[Cursor](https://docs.cursor.com/advanced/model-context-protocol) 是一個 AI 程式碼編輯器。
+
+**主要功能**：
+- 在 Cursor Composer 中支援 MCP 工具
+- 支援 STDIO 和 SSE
+
+### Emacs Mcp
+[Emacs Mcp](https://github.com/lizqwerscott/mcp.el) 是一個 Emacs 用戶端，旨在與 MCP 伺服器介接，實現無縫連線和互動。它為 AI 外掛程式（如 [gptel](https://github.com/karthink/gptel) 和 [llm](https://github.com/ahyatt/llm)）提供 MCP 工具調用支援，符合 Emacs 的標準工具調用格式。這種整合增強了 Emacs 生態系統中 AI 工具的功能。
+
+**主要功能：**
+- 為 Emacs 提供 MCP 工具支援。
+
+### Firebase Genkit
+[Genkit](https://github.com/firebase/genkit) 是 Firebase 的 SDK，用於將 GenAI 功能建構和整合到應用程式中。[genkitx-mcp](https://github.com/firebase/genkit/tree/main/js/plugins/mcp) 外掛程式支援將 MCP 伺服器作為用戶端使用，或從 Genkit 工具和提示建立 MCP 伺服器。
+
+**主要功能：**
+- 用戶端支援工具和提示（部分支援資源）
+- 在 Genkit 的 Dev UI 遊樂場中提供豐富的發現功能
+- 與 Genkit 現有的工具和提示無縫互操作
+- 適用於頂級供應商的各種 GenAI 模型
+
+### GenAIScript
+使用 [GenAIScript](https://microsoft.github.io/genaiscript/)（在 JavaScript 中）以程式設計方式組裝 LLM 的提示。在 JavaScript 中協調 LLM、工具和資料。
+
+**主要功能：**
+- 用於處理提示的 JavaScript 工具箱
+- 抽象化使其變得簡單高效
+- 無縫 Visual Studio Code 整合
+
+### Goose
+[Goose](https://github.com/block/goose) 是一個開源 AI 代理，透過自動化編碼任務來增強您的軟體開發能力。
+**主要功能：**
+- 透過工具向 Goose 公開 MCP 功能。
+- MCP 可以直接透過[擴充功能目錄](https://block.github.io/goose/v1/extensions/)、CLI 或 UI 安裝。
+- Goose 允許您透過[建立自己的 MCP 伺服器](https://block.github.io/goose/docs/tutorials/custom-extensions)來擴展其功能。
+- 包含用於開發、網頁抓取、自動化、記憶體以及與 JetBrains 和 Google Drive 整合的內建工具。
+
+### LibreChat
+[LibreChat](https://github.com/danny-avila/LibreChat) 是一個開源、可自訂的 AI 聊天 UI，支援多個 AI 提供者，現在包括 MCP 整合。
+
+**主要功能：**
+- 透過 MCP 伺服器擴展當前工具生態系統，包括 [程式碼解釋器](https://www.librechat.ai/docs/features/code_interpreter) 和圖像生成工具
+- 將工具新增至可自訂的 [代理](https://www.librechat.ai/docs/features/agents)，使用來自頂級供應商的各種 LLM
+- 開源且可自行託管，具有安全的多使用者支援
+- 未來藍圖包括擴展的 MCP 功能支援
+
+### mcp-agent
+[mcp-agent] 是一個簡單、可組合的框架，用於使用模型上下文協定建立代理。
+
+**主要功能：**
+- MCP 伺服器的自動連線管理。
+- 從多個伺服器向 LLM 公開工具。
+- 實作 [建立有效代理](https://www.anthropic.com/research/building-effective-agents) 中定義的每個模式。
+- 支援工作流程暫停/恢復訊號，例如等待人工回饋。
+
+### Roo Code
+[Roo Code](https://roocode.com) 透過 MCP 啟用 AI 編碼輔助。
+
+**主要功能：**
+- 支援 MCP 工具和資源
+- 與開發工作流程整合
+- 可擴展的 AI 功能
+
+### Sourcegraph Cody
+[Cody](https://openctx.org/docs/providers/modelcontextprotocol) 是 Sourcegraph 的 AI 編碼助理，它透過 OpenCTX 實作 MCP。
+
+**主要功能：**
+- 支援 MCP 資源
+- 與 Sourcegraph 的程式碼智慧整合
+- 使用 OpenCTX 作為抽象層
+- 計劃未來支援額外的 MCP 功能
+
+### Superinterface
+[Superinterface](https://superinterface.ai) 是 AI 基礎架構和開發者平台，用於建置具有 MCP 支援、互動式元件、客戶端函數呼叫等的應用程式內 AI 助理。
+
+**主要功能：**
+- 在透過 React 元件或腳本標籤嵌入的助理中使用來自 MCP 伺服器的工具
+- SSE 傳輸支援
+- 使用來自任何 AI 提供者的任何 AI 模型（OpenAI、Anthropic、Ollama 等）
+
+### TheiaAI/TheiaIDE
+[Theia AI](https://eclipsesource.com/blogs/2024/10/07/introducing-theia-ai/) 是一個用於建置 AI 增強工具和 IDE 的框架。[AI 驅動的 Theia IDE](https://eclipsesource.com/blogs/2024/10/08/introducting-ai-theia-ide/) 是一個基於 Theia AI 建構的開放且靈活的開發環境。
+
+**主要功能：**
+- **工具整合**：Theia AI 使 AI 代理（包括 Theia IDE 中的代理）能夠利用 MCP 伺服器進行無縫工具互動。
+- **可自訂的提示**：Theia IDE 允許使用者定義和調整提示，動態整合 MCP 伺服器以實現客製化的工作流程。
+- **自訂代理**：Theia IDE 支援建立利用 MCP 功能的自訂代理，使使用者能夠即時設計專用的工作流程。
+
+Theia AI 和 Theia IDE 的 MCP 整合為使用者提供了靈活性，使其成為探索和調整 MCP 的強大平台。
+
+**了解更多：**
+- [Theia IDE 和 Theia AI MCP 公告](https://eclipsesource.com/blogs/2024/12/19/theia-ide-and-theia-ai-support-mcp/)
+- [下載 AI 驅動的 Theia IDE](https://theia-ide.org/)
+
+### Windsurf Editor
+[Windsurf Editor](https://codeium.com/windsurf) 是一個代理式 IDE，它將 AI 輔助與開發者工作流程結合在一起。它具有創新的 AI Flow 系統，該系統可在保持開發者控制的同時實現協作和獨立的 AI 互動。
+
+**主要功能：**
+- 用於人機協作的革命性 AI Flow 範例
+- 智慧程式碼生成和理解
+- 具有多模型支援的豐富開發工具
+
+### Zed
+[Zed](https://zed.dev/docs/assistant/model-context-protocol) 是一個具有內建 MCP 支援的高效能程式碼編輯器，專注於提示範本和工具整合。
+
+**主要功能：**
+- 提示範本在編輯器中以斜線命令的形式呈現
+- 用於增強編碼工作流程的工具整合
+- 與編輯器功能和工作區上下文緊密整合
+- 不支援 MCP 資源
+
+### OpenSumi
+[OpenSumi](https://github.com/opensumi/core) 是一個框架，可協助您快速建置 AI 原生 IDE 產品。
+
+**主要功能：**
+- 在 OpenSumi 中支援 MCP 工具
+- 支援內建 IDE MCP 伺服器和自訂 MCP 伺服器
+
+## 將 MCP 支援新增至您的應用程式
+
+如果您已將 MCP 支援新增至您的應用程式，我們鼓勵您提交提取請求以將其新增至此列表。MCP 整合可以為您的使用者提供強大的上下文 AI 功能，並使您的應用程式成為不斷發展的 MCP 生態系統的一部分。
+
+新增 MCP 支援的好處：
+- 使使用者能夠攜帶自己的上下文和工具
+- 加入不斷成長的互通 AI 應用程式生態系統
+- 為使用者提供靈活的整合選項
+- 支援本地優先的 AI 工作流程
+
+若要開始在您的應用程式中實作 MCP，請查看我們的 [Python](https://github.com/modelcontextprotocol/python-sdk) 或 [TypeScript SDK 文件](https://github.com/modelcontextprotocol/typescript-sdk)
+
+## 更新和更正
+
+此列表由社群維護。如果您發現任何不準確之處，或想要更新有關您的應用程式中 MCP 支援的資訊，請提交提取請求或[在我們的文件儲存庫中開啟問題](https://github.com/modelcontextprotocol/docs/issues)。

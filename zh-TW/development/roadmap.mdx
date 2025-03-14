@@ -1,0 +1,58 @@
+---
+title: 路線圖
+description: 我們在 2025 年上半年發展模型上下文協議 (Model Context Protocol) 的計畫
+---
+
+模型上下文協議 (Model Context Protocol) 正在快速發展。本頁概述了我們目前對於 **2025 年上半年** 主要優先事項和未來方向的想法，儘管隨著專案的發展，這些想法可能會發生重大變化。
+
+<Note>此處提出的想法並非承諾——我們可能會以與描述不同的方式解決這些挑戰，或者有些挑戰可能根本不會實現。這也不是一份 _詳盡的_ 清單；我們可能會納入此處未提及的工作。</Note>
+
+我們鼓勵社群參與！每個章節都連結到相關的討論，您可以在其中了解更多資訊並貢獻您的想法。
+
+## 遠端 MCP 支援
+
+我們的首要任務是啟用 [遠端 MCP 連線](https://github.com/modelcontextprotocol/specification/discussions/102)，允許客戶端透過網際網路安全地連線到 MCP 伺服器。主要措施包括：
+
+- [**身份驗證與授權 (Authentication & Authorization)**](https://github.com/modelcontextprotocol/specification/discussions/64)：新增標準化的身份驗證功能，特別著重於 OAuth 2.0 支援。
+
+- [**服務發現 (Service Discovery)**](https://github.com/modelcontextprotocol/specification/discussions/69)：定義客戶端如何發現並連線到遠端 MCP 伺服器。
+
+- [**無狀態操作 (Stateless Operations)**](https://github.com/modelcontextprotocol/specification/discussions/102)：思考 MCP 是否也能涵蓋無伺服器環境，在這些環境中，它們將需要主要是無狀態的。
+
+## 參考實作
+
+為了幫助開發人員使用 MCP 進行建構，我們希望提供以下文件：
+
+- **客戶端範例 (Client Examples)**：全面的參考客戶端實作，示範所有協議功能
+- **協議草擬 (Protocol Drafting)**：用於提議和納入新協議功能的簡化流程
+
+## 發佈與探索
+
+展望未來，我們正在探索使 MCP 伺服器更易於存取的方法。我們可能會研究的一些領域包括：
+
+- **套件管理 (Package Management)**：MCP 伺服器的標準化封裝格式
+- **安裝工具 (Installation Tools)**：簡化跨 MCP 客戶端的伺服器安裝
+- **沙箱 (Sandboxing)**：透過伺服器隔離提高安全性
+- **伺服器註冊表 (Server Registry)**：用於發現可用 MCP 伺服器的通用目錄
+
+## 代理程式支援
+
+我們正在擴展 MCP 在 [複雜的代理工作流程](https://github.com/modelcontextprotocol/specification/discussions/111) 中的功能，特別著重於：
+
+- [**階層式代理程式系統 (Hierarchical Agent Systems)**](https://github.com/modelcontextprotocol/specification/discussions/94)：透過命名空間和拓撲感知，改進對代理程式樹狀結構的支援。
+
+- [**互動式工作流程 (Interactive Workflows)**](https://github.com/modelcontextprotocol/specification/issues/97)：更好地處理跨代理程式階層的使用者權限和資訊請求，以及將輸出發送給使用者而不是模型的方法。
+
+- [**串流結果 (Streaming Results)**](https://github.com/modelcontextprotocol/specification/issues/117)：來自長時間運行的代理程式操作的即時更新。
+
+## 更廣泛的生態系統
+
+我們也投入於：
+
+- **社群主導的標準開發 (Community-Led Standards Development)**：培養協作生態系統，讓所有 AI 提供者都能透過平等參與和共享治理，協助將 MCP 塑造成開放標準，確保其滿足多樣化 AI 應用和用例的需求。
+- [**其他模態 (Additional Modalities)**](https://github.com/modelcontextprotocol/specification/discussions/88)：擴展到文本之外，以支援音訊、視訊和其他格式。
+- [**標準化 (Standardization)**] 考慮透過標準化機構進行標準化。
+
+## 參與其中
+
+我們歡迎社群參與塑造 MCP 的未來。訪問我們的 [GitHub Discussions](https://github.com/orgs/modelcontextprotocol/discussions) 以加入對話並貢獻您的想法。

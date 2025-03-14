@@ -1,0 +1,368 @@
+---
+title: MCPサーバー
+description: Model Context Protocol（MCP）サーバーの実装と設定方法について学びます。
+---
+
+## 概要
+
+MCPサーバーは、Model Context Protocol（MCP）アーキテクチャの基盤となるコンポーネントであり、クライアントにツール、リソース、機能を提供します。プロトコルのサーバー側を実装し、以下の役割を担います。
+
+- クライアントが検出および実行できるツールの公開
+- URIベースのアクセスパターンによるリソースの管理
+- プロンプトテンプレートの提供とプロンプト要求の処理
+- クライアントとの機能ネゴシエーションのサポート
+- サーバー側のプロトコル操作の実装
+- 同時クライアント接続の管理
+- 構造化されたロギングと通知の提供
+
+サーバーは、同期APIと非同期APIの両方をサポートしており、さまざまなアプリケーションコンテキストに柔軟に統合できます。
+
+<Tabs>
+  <Tab title="Sync API">
+```java
+// カスタム構成でサーバーを作成
+McpSyncServer syncServer = McpServer.sync(transport)
+    .serverInfo("my-server", "1.0.0")
+    .capabilities(ServerCapabilities.builder()
+        .resources(true)     // リソースサポートを有効にする
+        .tools(true)         // ツールサポートを有効にする
+        .prompts(true)       // プロンプトサポートを有効にする
+        .logging()           // ロギングサポートを有効にする
+        .build())
+    .build()
+
+// サーバーを初期化
+syncServer.initialize()
+
+// ツール、リソース、プロンプトを登録
+syncServer.addTool(syncToolRegistration)
+syncServer.addResource(syncResourceRegistration)
+syncServer.addPrompt(syncPromptRegistration)
+
+// ロギング通知を送信
+syncServer.loggingNotification(LoggingMessageNotification.builder()
+    .level(LoggingLevel.INFO)
+    .logger("custom-logger")
+    .data("Server initialized")
+    .build())
+
+// 完了したらサーバーを閉じる
+syncServer.close()
+```
+  </Tab>
+
+  <Tab title="Async API">
+```java
+// カスタム構成で非同期サーバーを作成
+McpAsyncServer asyncServer = McpServer.async(transport)
+    .serverInfo("my-server", "1.0.0")
+    .capabilities(ServerCapabilities.builder()
+        .resources(true)     // リソースサポートを有効にする
+        .tools(true)         // ツールサポートを有効にする
+        .prompts(true)       // プロンプトサポートを有効にする
+        .logging()           // ロギングサポートを有効にする
+        .build())
+    .build()
+
+// サーバーを初期化
+asyncServer.initialize()
+    .doOnSuccess(v -> logger.info("Server initialized"))
+    .subscribe()
+
+// ツール、リソース、プロンプトを登録
+asyncServer.addTool(asyncToolRegistration)
+    .doOnSuccess(v -> logger.info("Tool registered"))
+    .subscribe()
+
+asyncServer.addResource(asyncResourceRegistration)
+    .doOnSuccess(v -> logger.info("Resource registered"))
+    .subscribe()
+
+asyncServer.addPrompt(asyncPromptRegistration)
+    .doOnSuccess(v -> logger.info("Prompt registered"))
+    .subscribe()
+
+// ロギング通知を送信
+asyncServer.loggingNotification(LoggingMessageNotification.builder()
+    .level(LoggingLevel.INFO)
+    .logger("custom-logger")
+    .data("Server initialized")
+    .build())
+
+// 完了したらサーバーを閉じる
+asyncServer.close()
+    .doOnSuccess(v -> logger.info("Server closed"))
+    .subscribe()
+```
+  </Tab>
+</Tabs>
+
+
+## サーバートランスポート
+
+MCP SDKのトランスポート層は、クライアントとサーバー間の通信を処理する役割を担います。さまざまな通信プロトコルとパターンをサポートするために、さまざまな実装を提供しています。SDKには、いくつかの組み込みトランスポート実装が含まれています。
+
+<Tabs>
+
+  <Tab title="STDIO">
+    <>
+      インプロセスベースのトランスポートを作成します。
+
+      ```java
+      StdioServerTransport transport = new StdioServerTransport(new ObjectMapper())
+      ```
+
+      標準入出力ストリームを介した双方向JSON-RPCメッセージ処理を、非ブロッキングメッセージ処理、シリアライズ/デシリアライズ、および正常なシャットダウンサポートとともに提供します。
+
+      主な機能：
+      <ul>
+        <li>stdin/stdoutを介した双方向通信</li>
+        <li>プロセスベースの統合サポート</li>
+        <li>簡単なセットアップと構成</li>
+        <li>軽量実装</li>
+      </ul>
+    </>
+  </Tab>
+
+<Tab title="SSE (WebFlux)">
+  <>
+    <p>WebFluxベースのSSEサーバートランスポートを作成します。<br /><code>mcp-spring-webflux</code> 依存関係が必要です。</p>
+
+    ```java
+    @Configuration
+    class McpConfig {
+        @Bean
+        WebFluxSseServerTransport webFluxSseServerTransport(ObjectMapper mapper) {
+            return new WebFluxSseServerTransport(mapper, "/mcp/message")
+        }
+
+        @Bean
+        RouterFunction<?> mcpRouterFunction(WebFluxSseServerTransport transport) {
+            return transport.getRouterFunction()
+        }
+    }
+    ```
+
+    <p>MCP HTTP with SSEトランスポート仕様を実装し、以下を提供します。</p>
+    <ul>
+      <li>WebFluxによるリアクティブHTTPストリーミング</li>
+      <li>SSEエンドポイントを介した同時クライアント接続</li>
+      <li>メッセージルーティングとセッション管理</li>
+      <li>正常なシャットダウン機能</li>
+    </ul>
+  </>
+</Tab>
+
+
+<Tab title="SSE (WebMvc)">
+  <>
+    <p>WebMvcベースのSSEサー​​バートランスポートを作成します。<br /><code>mcp-spring-webmvc</code> 依存関係が必要です。</p>
+
+    ```java
+    @Configuration
+    @EnableWebMvc
+    class McpConfig {
+        @Bean
+        WebMvcSseServerTransport webMvcSseServerTransport(ObjectMapper mapper) {
+            return new WebMvcSseServerTransport(mapper, "/mcp/message")
+        }
+
+        @Bean
+        RouterFunction<ServerResponse> mcpRouterFunction(WebMvcSseServerTransport transport) {
+            return transport.getRouterFunction()
+        }
+    }
+    ```
+
+    <p>MCP HTTP with SSEトランスポート仕様を実装し、以下を提供します。</p>
+    <ul>
+      <li>サーバー側のイベントストリーミング</li>
+      <li>Spring WebMVCとの統合</li>
+      <li>従来のWebアプリケーションのサポート</li>
+      <li>同期操作処理</li>
+    </ul>
+  </>
+</Tab>
+
+
+<Tab title="SSE (Servlet)">
+  <>
+    <p>
+      ServletベースのSSEサー​​バートランスポートを作成します。コア<code>mcp</code>モジュールに含まれています。<br />
+      <code>HttpServletSseServerTransport</code>は、任意のServletコンテナで使用できます。<br />
+      Spring Webアプリケーションで使用するには、Servlet Beanとして登録できます。
+    </p>
+
+    ```java
+    @Configuration
+    @EnableWebMvc
+    public class McpServerConfig implements WebMvcConfigurer {
+
+        @Bean
+        public HttpServletSseServerTransport servletSseServerTransport() {
+            return new HttpServletSseServerTransport(new ObjectMapper(), "/mcp/message")
+        }
+
+        @Bean
+        public ServletRegistrationBean customServletBean(HttpServletSseServerTransport servlet) {
+            return new ServletRegistrationBean(servlet)
+        }
+    }
+    ```
+
+    <p>
+      従来のServlet APIを使用してMCP HTTP with SSEトランスポート仕様を実装し、以下を提供します。
+    </p>
+    <ul>
+      <li>Servlet 6.0非同期サポートを使用した非同期メッセージ処理</li>
+      <li>複数のクライアント接続のセッション管理</li>
+      <li>
+        2種類のエンドポイント：
+        <ul>
+          <li>サーバーからクライアントへのイベント用のSSEエンドポイント（<code>/sse</code>）</li>
+          <li>クライアントからサーバーへのリクエスト用のメッセージエンドポイント（構成可能）</li>
+        </ul>
+      </li>
+      <li>エラー処理とレスポンスフォーマット</li>
+      <li>グレースフルシャットダウンのサポート</li>
+    </ul>
+  </>
+</Tab>
+
+</Tabs>
+
+
+## サーバー機能
+
+サーバーはさまざまな機能で設定できます：
+
+```java
+var capabilities = ServerCapabilities.builder()
+    .resources(false, true)  // Resource support with list changes notifications
+    .tools(true)            // Tool support with list changes notifications
+    .prompts(true)          // Prompt support with list changes notifications
+    .logging()              // Enable logging support (enabled by default with loging level INFO)
+    .build();
+```
+
+### ロギングサポート
+
+サーバーは構造化されたロギング機能を提供し、異なる重要度レベルのログメッセージをクライアントに送信できます：
+
+```java
+// Send a log message to clients
+server.loggingNotification(LoggingMessageNotification.builder()
+    .level(LoggingLevel.INFO)
+    .logger("custom-logger")
+    .data("Custom log message")
+    .build());
+```
+
+クライアントは`mcpClient.setLoggingLevel(level)`リクエストを通じて受信する最小ログレベルを制御できます。設定レベル以下のメッセージはフィルタリングされます。
+サポートされているログレベル（重要度の順に）：DEBUG (0)、INFO (1)、NOTICE (2)、WARNING (3)、ERROR (4)、CRITICAL (5)、ALERT (6)、EMERGENCY (7)
+
+### ツール登録
+
+<Tabs>
+  <Tab title="Sync">
+```java
+// Sync tool registration
+var syncToolRegistration = new McpServerFeatures.SyncToolRegistration(
+    new Tool("calculator", "Basic calculator", Map.of(
+        "operation", "string",
+        "a", "number",
+        "b", "number"
+    )),
+    arguments -> {
+        // Tool implementation
+        return new CallToolResult(result, false);
+    }
+);
+```
+  </Tab>
+
+  <Tab title="Async">
+```java
+// Async tool registration
+var asyncToolRegistration = new McpServerFeatures.AsyncToolRegistration(
+    new Tool("calculator", "Basic calculator", Map.of(
+        "operation", "string",
+        "a", "number",
+        "b", "number"
+    )),
+    arguments -> {
+        // Tool implementation
+        return Mono.just(new CallToolResult(result, false));
+    }
+);
+```
+  </Tab>
+</Tabs>
+
+### リソース登録
+
+<Tabs>
+  <Tab title="Sync">
+```java
+// Sync resource registration
+var syncResourceRegistration = new McpServerFeatures.SyncResourceRegistration(
+    new Resource("custom://resource", "name", "description", "mime-type", null),
+    request -> {
+        // Resource read implementation
+        return new ReadResourceResult(contents);
+    }
+);
+```
+  </Tab>
+
+  <Tab title="Async">
+```java
+// Async resource registration
+var asyncResourceRegistration = new McpServerFeatures.AsyncResourceRegistration(
+    new Resource("custom://resource", "name", "description", "mime-type", null),
+    request -> {
+        // Resource read implementation
+        return Mono.just(new ReadResourceResult(contents));
+    }
+);
+```
+  </Tab>
+</Tabs>
+
+### プロンプト登録
+
+<Tabs>
+  <Tab title="Sync">
+```java
+// Sync prompt registration
+var syncPromptRegistration = new McpServerFeatures.SyncPromptRegistration(
+    new Prompt("greeting", "description", List.of(
+        new PromptArgument("name", "description", true)
+    )),
+    request -> {
+        // Prompt implementation
+        return new GetPromptResult(description, messages);
+    }
+);
+```
+  </Tab>
+
+  <Tab title="Async">
+```java
+// Async prompt registration
+var asyncPromptRegistration = new McpServerFeatures.AsyncPromptRegistration(
+    new Prompt("greeting", "description", List.of(
+        new PromptArgument("name", "description", true)
+    )),
+    request -> {
+        // Prompt implementation
+        return Mono.just(new GetPromptResult(description, messages));
+    }
+);
+```
+  </Tab>
+</Tabs>
+
+## エラー処理
+
+SDKはMcpErrorクラスを通じて包括的なエラー処理を提供し、プロトコル互換性、トランスポート通信、JSON-RPCメッセージング、ツール実行、リソース管理、プロンプト処理、タイムアウト、および接続の問題をカバーします。この統一されたエラー処理アプローチにより、同期操作と非同期操作の両方で一貫性のある信頼性の高いエラー管理が保証されます。

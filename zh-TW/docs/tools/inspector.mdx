@@ -1,0 +1,144 @@
+---
+title: Inspector
+description: 深入指南，教您如何使用 MCP Inspector 測試和偵錯 Model Context Protocol 伺服器
+---
+
+[MCP Inspector](https://github.com/modelcontextprotocol/inspector) 是一款互動式開發者工具，用於測試和偵錯 MCP 伺服器。[偵錯指南](/docs/tools/debugging) 將 Inspector 作為整體偵錯工具包的一部分進行介紹，而本文檔則詳細探討 Inspector 的功能和特性。
+
+## 開始使用
+
+### 安裝與基本用法
+
+Inspector 可直接透過 `npx` 執行，無需安裝：
+
+
+```bash
+npx @modelcontextprotocol/inspector <command>
+```
+
+```bash
+npx @modelcontextprotocol/inspector <command> <arg1> <arg2>
+```
+
+#### 檢測來自 NPM 或 PyPi 的伺服器
+
+從 [NPM](https://npmjs.com) 或 [PyPi](https://pypi.com) 啟動伺服器套件是一種常見方式。
+
+<Tabs>
+
+  <Tab title="NPM package">
+  ```bash
+  npx -y @modelcontextprotocol/inspector npx <package-name> <args>
+  # For example
+  npx -y @modelcontextprotocol/inspector npx server-postgres postgres://127.0.0.1/testdb
+  ```
+  </Tab>
+
+  <Tab title="PyPi package">
+  ```bash
+  npx @modelcontextprotocol/inspector uvx <package-name> <args>
+  # For example
+  npx @modelcontextprotocol/inspector uvx mcp-server-git --repository ~/code/mcp/servers.git
+  ```
+  </Tab>
+</Tabs>
+
+#### 檢測本地開發的伺服器
+
+若要檢測本地開發或下載為儲存庫的伺服器，最常見的方式是：
+
+<Tabs>
+  <Tab title="TypeScript">
+  ```bash
+  npx @modelcontextprotocol/inspector node path/to/server/index.js args...
+  ```
+  </Tab>
+  <Tab title="Python">
+  ```bash
+  npx @modelcontextprotocol/inspector \
+    uv \
+    --directory path/to/server \
+    run \
+    package-name \
+    args...
+  ```
+  </Tab>
+</Tabs>
+
+請仔細閱讀任何隨附的 README 以獲得最準確的指示。
+
+## 功能概述
+
+<Frame caption="MCP Inspector 介面">
+  <img src="/images/mcp-inspector.png" />
+</Frame>
+
+Inspector 提供多項功能，可與您的 MCP 伺服器互動：
+
+### 伺服器連線窗格
+- 允許選擇 [transport](/docs/concepts/transports) 以連線至伺服器
+- 對於本地伺服器，支援自訂命令列引數和環境
+
+### Resources tab
+- 列出所有可用的資源
+- 顯示資源 metadata (MIME types, descriptions)
+- 允許資源內容檢測
+- 支援訂閱測試
+
+### Prompts tab
+- 顯示可用的 prompt templates
+- 顯示 prompt arguments 和 descriptions
+- 啟用使用自訂引數的 prompt 測試
+- 預覽產生的 messages
+
+### Tools tab
+- 列出可用的 tools
+- 顯示 tool schemas 和 descriptions
+- 啟用使用自訂輸入的 tool 測試
+- 顯示 tool execution results
+
+### Notifications pane
+- 呈現從伺服器記錄的所有 logs
+- 顯示從伺服器接收的 notifications
+
+## 最佳實務
+
+### 開發工作流程
+
+1. 開始開發
+   - 使用您的伺服器啟動 Inspector
+   - 驗證基本 connectivity
+   - 檢查 capability negotiation
+
+2. 迭代測試
+   - 變更伺服器
+   - 重新建置伺服器
+   - 重新連線 Inspector
+   - 測試受影響的功能
+   - 監控 messages
+
+3. 測試 edge cases
+   - 無效的 inputs
+   - 遺失的 prompt arguments
+   - 並行 operations
+   - 驗證錯誤處理和 error responses
+
+## 後續步驟
+
+<CardGroup cols={2}>
+    <Card
+        title="Inspector Repository"
+        icon="github"
+        href="https://github.com/modelcontextprotocol/inspector"
+    >
+        查看 MCP Inspector 原始碼
+    </Card>
+
+    <Card
+        title="Debugging Guide"
+        icon="bug"
+        href="/docs/tools/debugging"
+    >
+        了解更廣泛的偵錯策略
+    </Card>
+</CardGroup>

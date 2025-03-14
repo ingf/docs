@@ -1,0 +1,79 @@
+---
+title: "Roots"
+description: "Understanding roots in MCP"
+---
+
+Roots 是 MCP 中的一個概念，用於定義伺服器可以運作的邊界。它們提供了一種方式，讓客戶端告知伺服器相關資源及其位置。
+
+## What are Roots?
+
+Root 是一個 URI，客戶端建議伺服器應專注於此。當客戶端連接到伺服器時，它會宣告伺服器應處理哪些 roots。雖然主要用於檔案系統路徑，但 roots 可以是任何有效的 URI，包括 HTTP URL。
+
+例如，roots 可以是：
+
+```
+file:///home/user/projects/myapp
+https://api.example.com/v1
+```
+
+## Why Use Roots?
+
+Roots 具有幾個重要的目的：
+
+1. **Guidance**: 它們告知伺服器相關資源和位置
+2. **Clarity**: Roots 清楚地表明哪些資源是您工作區的一部分
+3. **Organization**: 多個 roots 讓您可以同時處理不同的資源
+
+## How Roots Work
+
+當客戶端支持 roots 時，它會：
+
+1. 在連接期間宣告 `roots` capability
+2. 向伺服器提供建議的 roots 列表
+3. 在 roots 變更時通知伺服器（如果支持）
+
+雖然 roots 是信息性的，並非嚴格強制執行，但伺服器應：
+
+1. 尊重提供的 roots
+2. 使用 root URIs 來定位和存取資源
+3. 優先處理 root 邊界內的操作
+
+## Common Use Cases
+
+Roots 通常用於定義：
+
+- Project directories
+- Repository locations
+- API endpoints
+- Configuration locations
+- Resource boundaries
+
+## Best Practices
+
+使用 roots 時：
+
+1. 僅建議必要的資源
+2. 為 roots 使用清晰、描述性的名稱
+3. 監控 root 可訪問性
+4. 優雅地處理 root 變更
+
+## Example
+
+以下是一個典型的 MCP 客戶端可能如何公開 roots 的範例：
+
+```json
+{
+  "roots": [
+    {
+      "uri": "file:///home/user/projects/frontend",
+      "name": "Frontend Repository"
+    },
+    {
+      "uri": "https://api.example.com/v1",
+      "name": "API Endpoint"
+    }
+  ]
+}
+```
+
+此配置建議伺服器專注於本地 repository 和 API endpoint，同時保持它們在邏輯上分離。

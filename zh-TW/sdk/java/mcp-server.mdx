@@ -1,0 +1,368 @@
+---
+title: MCP 伺服器
+description: 學習如何實現和配置 Model Context Protocol (MCP) 伺服器
+---
+
+## 概述
+
+MCP 伺服器是 Model Context Protocol (MCP) 架構中的基礎組件，為客戶端提供工具、資源和能力。它實現了協議的伺服器端部分，負責：
+
+- 暴露客戶端可以發現和執行的工具
+- 管理具有基於 URI 的訪問模式的資源
+- 提供提示模板並處理提示請求
+- 支援與客戶端的能力協商
+- 實現伺服器端協議操作
+- 管理並發客戶端連接
+- 提供結構化日誌記錄和通知
+
+伺服器支援同步和非同步 API，允許在不同的應用場景中靈活整合。
+
+<Tabs>
+  <Tab title="同步 API">
+```java
+// 使用自定義配置創建伺服器
+McpSyncServer syncServer = McpServer.sync(transport)
+    .serverInfo("my-server", "1.0.0")
+    .capabilities(ServerCapabilities.builder()
+        .resources(true)     // 啟用資源支援
+        .tools(true)         // 啟用工具支援
+        .prompts(true)       // 啟用提示支援
+        .logging()           // 啟用日誌記錄支援
+        .build())
+    .build()
+
+// 初始化伺服器
+syncServer.initialize()
+
+// 註冊工具、資源和提示
+syncServer.addTool(syncToolRegistration)
+syncServer.addResource(syncResourceRegistration)
+syncServer.addPrompt(syncPromptRegistration)
+
+// 發送日誌通知
+syncServer.loggingNotification(LoggingMessageNotification.builder()
+    .level(LoggingLevel.INFO)
+    .logger("custom-logger")
+    .data("伺服器已初始化")
+    .build())
+
+// 完成後關閉伺服器
+syncServer.close()
+```
+  </Tab>
+
+  <Tab title="非同步 API">
+```java
+// 使用自定義配置創建非同步伺服器
+McpAsyncServer asyncServer = McpServer.async(transport)
+    .serverInfo("my-server", "1.0.0")
+    .capabilities(ServerCapabilities.builder()
+        .resources(true)     // 啟用資源支援
+        .tools(true)         // 啟用工具支援
+        .prompts(true)       // 啟用提示支援
+        .logging()           // 啟用日誌記錄支援
+        .build())
+    .build()
+
+// 初始化伺服器
+asyncServer.initialize()
+    .doOnSuccess(v -> logger.info("伺服器已初始化"))
+    .subscribe()
+
+// 註冊工具、資源和提示
+asyncServer.addTool(asyncToolRegistration)
+    .doOnSuccess(v -> logger.info("工具已註冊"))
+    .subscribe()
+
+asyncServer.addResource(asyncResourceRegistration)
+    .doOnSuccess(v -> logger.info("資源已註冊"))
+    .subscribe()
+
+asyncServer.addPrompt(asyncPromptRegistration)
+    .doOnSuccess(v -> logger.info("提示已註冊"))
+    .subscribe()
+
+// 發送日誌通知
+asyncServer.loggingNotification(LoggingMessageNotification.builder()
+    .level(LoggingLevel.INFO)
+    .logger("custom-logger")
+    .data("伺服器已初始化")
+    .build())
+
+// 完成後關閉伺服器
+asyncServer.close()
+    .doOnSuccess(v -> logger.info("伺服器已關閉"))
+    .subscribe()
+```
+  </Tab>
+</Tabs>
+
+
+## 伺服器傳輸
+
+MCP SDK 中的傳輸層負責處理客戶端和伺服器之間的通信。它提供不同的實現以支援各種通信協議和模式。SDK 包含幾個內置的傳輸實現：
+
+<Tabs>
+  
+  <Tab title="標準輸入輸出">
+    <>
+      創建基於進程的傳輸：
+
+      ```java
+      StdioServerTransport transport = new StdioServerTransport(new ObjectMapper())
+      ```
+
+      通過標準輸入/輸出流提供雙向 JSON-RPC 消息處理，具有非阻塞消息處理、序列化/反序列化和優雅關閉支援。
+
+      主要特點：
+      <ul>
+        <li>通過 stdin/stdout 的雙向通信</li>
+        <li>基於進程的整合支援</li>
+        <li>簡單的設置和配置</li>
+        <li>輕量級實現</li>
+      </ul>
+    </>
+  </Tab>
+
+<Tab title="SSE (WebFlux)">
+  <>
+    <p>創建基於 WebFlux 的 SSE 伺服器傳輸。<br />需要 <code>mcp-spring-webflux</code> 依賴項。</p>
+
+    ```java
+    @Configuration
+    class McpConfig {
+        @Bean
+        WebFluxSseServerTransport webFluxSseServerTransport(ObjectMapper mapper) {
+            return new WebFluxSseServerTransport(mapper, "/mcp/message")
+        }
+
+        @Bean
+        RouterFunction<?> mcpRouterFunction(WebFluxSseServerTransport transport) {
+            return transport.getRouterFunction()
+        }
+    }
+    ```
+
+    <p>實現 MCP HTTP 與 SSE 傳輸規範，提供：</p>
+    <ul>
+      <li>使用 WebFlux 的響應式 HTTP 流式傳輸</li>
+      <li>通過 SSE 端點的並發客戶端連接</li>
+      <li>消息路由和會話管理</li>
+      <li>優雅關閉功能</li>
+    </ul>
+  </>
+</Tab>
+
+
+<Tab title="SSE (WebMvc)">
+  <>
+    <p>創建基於 WebMvc 的 SSE 伺服器傳輸。<br />需要 <code>mcp-spring-webmvc</code> 依賴項。</p>
+
+    ```java
+    @Configuration
+    @EnableWebMvc
+    class McpConfig {
+        @Bean
+        WebMvcSseServerTransport webMvcSseServerTransport(ObjectMapper mapper) {
+            return new WebMvcSseServerTransport(mapper, "/mcp/message")
+        }
+
+        @Bean
+        RouterFunction<ServerResponse> mcpRouterFunction(WebMvcSseServerTransport transport) {
+            return transport.getRouterFunction()
+        }
+    }
+    ```
+
+    <p>實現 MCP HTTP 與 SSE 傳輸規範，提供：</p>
+    <ul>
+      <li>伺服器端事件流式傳輸</li>
+      <li>與 Spring WebMVC 整合</li>
+      <li>支援傳統 Web 應用程式</li>
+      <li>同步操作處理</li>
+    </ul>
+  </>
+</Tab>
+
+
+<Tab title="SSE (Servlet)">
+  <>
+    <p>
+      創建基於 Servlet 的 SSE 伺服器傳輸。它包含在核心 <code>mcp</code> 模組中。<br />
+      <code>HttpServletSseServerTransport</code> 可以與任何 Servlet 容器一起使用。<br />
+      要在 Spring Web 應用程式中使用它，您可以將其註冊為 Servlet bean：
+    </p>
+
+    ```java
+    @Configuration
+    @EnableWebMvc
+    public class McpServerConfig implements WebMvcConfigurer {
+
+        @Bean
+        public HttpServletSseServerTransport servletSseServerTransport() {
+            return new HttpServletSseServerTransport(new ObjectMapper(), "/mcp/message")
+        }
+
+        @Bean
+        public ServletRegistrationBean customServletBean(HttpServletSseServerTransport servlet) {
+            return new ServletRegistrationBean(servlet)
+        }
+    }
+    ```
+
+    <p>
+      使用傳統 Servlet API 實現 MCP HTTP 與 SSE 傳輸規範，提供：
+    </p>
+    <ul>
+      <li>使用 Servlet 6.0 非同步支援的非同步消息處理</li>
+      <li>多客戶端連接的會話管理</li>
+      <li>
+        兩種類型的端點：
+        <ul>
+          <li>SSE 端點 (<code>/sse</code>) 用於伺服器到客戶端的事件</li>
+          <li>消息端點（可配置）用於客戶端到伺服器的請求</li>
+        </ul>
+      </li>
+      <li>錯誤處理和響應格式化</li>
+      <li>優雅關閉支援</li>
+    </ul>
+  </>
+</Tab>
+
+</Tabs>
+
+
+## 伺服器能力
+
+伺服器可以配置各種能力：
+
+```java
+var capabilities = ServerCapabilities.builder()
+    .resources(false, true)  // 資源支援，帶列表變更通知
+    .tools(true)            // 工具支援，帶列表變更通知
+    .prompts(true)          // 提示支援，帶列表變更通知
+    .logging()              // 啟用日誌記錄支援（默認啟用，日誌級別為 INFO）
+    .build()
+```
+
+### 日誌記錄支援
+
+伺服器提供結構化日誌記錄功能，允許以不同嚴重級別向客戶端發送日誌消息：
+
+```java
+// 向客戶端發送日誌消息
+server.loggingNotification(LoggingMessageNotification.builder()
+    .level(LoggingLevel.INFO)
+    .logger("custom-logger")
+    .data("自定義日誌消息")
+    .build())
+```
+
+客戶端可以通過 `mcpClient.setLoggingLevel(level)` 請求控制它們接收的最低日誌級別。低於設置級別的消息將被過濾掉。
+支援的日誌級別（按嚴重性遞增順序）：DEBUG (0), INFO (1), NOTICE (2), WARNING (3), ERROR (4), CRITICAL (5), ALERT (6), EMERGENCY (7)
+
+### 工具註冊
+
+<Tabs>
+  <Tab title="同步">
+```java
+// 同步工具註冊
+var syncToolRegistration = new McpServerFeatures.SyncToolRegistration(
+    new Tool("calculator", "基本計算器", Map.of(
+        "operation", "string",
+        "a", "number",
+        "b", "number"
+    )),
+    arguments -> {
+        // 工具實現
+        return new CallToolResult(result, false)
+    }
+)
+```
+  </Tab>
+
+  <Tab title="非同步">
+```java
+// 非同步工具註冊
+var asyncToolRegistration = new McpServerFeatures.AsyncToolRegistration(
+    new Tool("calculator", "基本計算器", Map.of(
+        "operation", "string",
+        "a", "number",
+        "b", "number"
+    )),
+    arguments -> {
+        // 工具實現
+        return Mono.just(new CallToolResult(result, false))
+    }
+)
+```
+  </Tab>
+</Tabs>
+
+### 資源註冊
+
+<Tabs>
+  <Tab title="同步">
+```java
+// 同步資源註冊
+var syncResourceRegistration = new McpServerFeatures.SyncResourceRegistration(
+    new Resource("custom://resource", "name", "description", "mime-type", null),
+    request -> {
+        // 資源讀取實現
+        return new ReadResourceResult(contents)
+    }
+)
+```
+  </Tab>
+
+  <Tab title="非同步">
+```java
+// 非同步資源註冊
+var asyncResourceRegistration = new McpServerFeatures.AsyncResourceRegistration(
+    new Resource("custom://resource", "name", "description", "mime-type", null),
+    request -> {
+        // 資源讀取實現
+        return Mono.just(new ReadResourceResult(contents))
+    }
+)
+```
+  </Tab>
+</Tabs>
+
+### 提示註冊
+
+<Tabs>
+  <Tab title="同步">
+```java
+// 同步提示註冊
+var syncPromptRegistration = new McpServerFeatures.SyncPromptRegistration(
+    new Prompt("greeting", "description", List.of(
+        new PromptArgument("name", "description", true)
+    )),
+    request -> {
+        // 提示實現
+        return new GetPromptResult(description, messages)
+    }
+)
+```
+  </Tab>
+
+  <Tab title="非同步">
+```java
+// 非同步提示註冊
+var asyncPromptRegistration = new McpServerFeatures.AsyncPromptRegistration(
+    new Prompt("greeting", "description", List.of(
+        new PromptArgument("name", "description", true)
+    )),
+    request -> {
+        // 提示實現
+        return Mono.just(new GetPromptResult(description, messages))
+    }
+)
+```
+  </Tab>
+</Tabs>
+
+## 錯誤處理
+
+SDK 通過 McpError 類提供全面的錯誤處理，涵蓋協議相容性、傳輸通信、JSON-RPC 消息傳遞、工具執行、資源管理、提示處理、超時和連接問題。這種統一的錯誤處理方法確保在同步和非同步操作中一致且可靠的錯誤管理。

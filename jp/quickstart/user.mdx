@@ -1,0 +1,244 @@
+---
+title: "Claude Desktopユーザー向け"
+description: "Claude for Desktopで事前構築されたサーバーを使用する方法"
+---
+
+このチュートリアルでは、[Claude for Desktop](https://claude.ai/download)を拡張して、コンピュータのファイルシステムから読み取り、新しいファイルを書き込み、ファイルを移動し、さらにはファイルを検索できるようにします。
+
+<Frame>
+  <img src="/images/quickstart-filesystem.png" />
+</Frame>
+
+心配しないでください — これらのアクションを実行する前に、あなたの許可を求めます！
+
+## 1. Claude for Desktopをダウンロード
+
+まず、[Claude for Desktop](https://claude.ai/download)をダウンロードし、macOSまたはWindowsを選択します。（LinuxはまだClaude for Desktopをサポートしていません。）
+
+インストール手順に従ってください。
+
+すでにClaude for Desktopをお持ちの場合は、コンピュータのClaudeメニューをクリックし、「更新を確認...」を選択して、最新バージョンであることを確認してください。
+
+<Accordion title="なぜClaude for DesktopであってClaude.aiではないのか？">
+  サーバーはローカルで実行されるため、MCPは現在デスクトップホストのみをサポートしています。リモートホストは開発中です。
+</Accordion>
+
+## 2. Filesystem MCP Serverを追加
+
+このファイルシステム機能を追加するには、事前構築された[Filesystem MCP Server](https://github.com/modelcontextprotocol/servers/tree/main/src/filesystem)をClaude for Desktopにインストールします。これは、Anthropicとコミュニティによって作成された[サーバー](https://github.com/modelcontextprotocol/servers/tree/main)の1つです。
+
+コンピュータのClaudeメニューを開き、「設定...」を選択して開始します。これらはアプリウィンドウ自体にあるClaudeアカウント設定ではないことに注意してください。
+
+Macでの見た目は次のようになります：
+<Frame style={{ textAlign: 'center' }}>
+  <img src="/images/quickstart-menu.png" width="400" />
+</Frame>
+
+設定ペインの左側のバーで「開発者」をクリックし、「設定を編集」をクリックします：
+<Frame>
+  <img src="/images/quickstart-developer.png" />
+</Frame>
+
+これにより、次の場所に設定ファイルが作成されます：
+- macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`
+- Windows: `%APPDATA%\Claude\claude_desktop_config.json`
+
+まだ持っていない場合は、ファイルシステムにファイルが表示されます。
+
+任意のテキストエディタで設定ファイルを開きます。この内容に置き換えます：
+<Tabs>
+<Tab title="MacOS/Linux">
+```json
+{
+  "mcpServers": {
+    "filesystem": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-filesystem",
+        "/Users/username/Desktop",
+        "/Users/username/Downloads"
+      ]
+    }
+  }
+}
+```
+</Tab>
+<Tab title="Windows">
+```json
+{
+  "mcpServers": {
+    "filesystem": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-filesystem",
+        "C:\\Users\\username\\Desktop",
+        "C:\\Users\\username\\Downloads"
+      ]
+    }
+  }
+}
+```
+</Tab>
+</Tabs>
+
+`username`をコンピュータのユーザー名に置き換えてください。パスは、Claudeがアクセスおよび変更できるようにしたい有効なディレクトリを指す必要があります。デスクトップとダウンロード用に設定されていますが、さらにパスを追加することもできます。
+
+これを正常に実行するには、コンピュータに[Node.js](https://nodejs.org)が必要です。Nodeがインストールされていることを確認するには、コンピュータのコマンドラインを開きます。
+- macOSでは、アプリケーションフォルダからターミナルを開きます
+- Windowsでは、Windows + Rを押し、「cmd」と入力し、Enterを押します
+
+コマンドラインで、次のコマンドを入力してNodeがインストールされていることを確認します：
+```bash
+node --version
+```
+エラーが表示され、「コマンドが見つかりません」または「nodeが認識されません」と表示された場合は、[nodejs.org](https://nodejs.org/)からNodeをダウンロードしてください。
+
+<Tip>
+**設定ファイルの仕組み**
+
+この設定ファイルは、Claude for Desktopがアプリケーションを起動するたびに起動するMCPサーバーを指示します。この場合、Node `npx`コマンドを使用して`@modelcontextprotocol/server-filesystem`をインストールおよび実行する「filesystem」と呼ばれる1つのサーバーを追加しました。このサーバーは、[こちら](https://github.com/modelcontextprotocol/servers/tree/main/src/filesystem)で説明されているように、Claude for Desktopでファイルシステムにアクセスできるようにします。
+</Tip>
+
+<Warning>
+**コマンドの権限**
+
+Claude for Desktopは、設定ファイル内のコマンドをユーザーアカウントの権限で実行し、ローカルファイルにアクセスします。ソースを理解し、信頼する場合にのみコマンドを追加してください。
+</Warning>
+
+## 3. Claudeを再起動
+
+設定ファイルを更新した後、Claude for Desktopを再起動する必要があります。
+
+再起動すると、入力ボックスの右下隅にハンマー<img src="/images/claude-desktop-mcp-hammer-icon.svg" style={{display: 'inline', margin: 0, height: '1.3em'}} />アイコンが表示されるはずです：
+
+<Frame>
+  <img src="/images/quickstart-hammer.png" />
+</Frame>
+
+ハンマーアイコンをクリックすると、Filesystem MCP Serverに付属するツールが表示されます：
+
+<Frame style={{ textAlign: 'center' }}>
+  <img src="/images/quickstart-tools.png" width="400" />
+</Frame>
+
+サーバーがClaude for Desktopに認識されない場合は、[トラブルシューティング](#troubleshooting)セクションに進んでデバッグのヒントを確認してください。
+
+## 4. 試してみましょう！
+
+これでClaudeと対話し、ファイルシステムについて尋ねることができます。関連するツールを呼び出すタイミングを知っているはずです。
+
+Claudeに尋ねることができること：
+- 詩を書いてデスクトップに保存できますか？
+- ダウンロードフォルダにある仕事関連のファイルは何ですか？
+- デスクトップ上のすべての画像を新しいフォルダ「Images」に移動できますか？
+
+必要に応じて、Claudeは関連するツールを呼び出し、アクションを実行する前に承認を求めます：
+<Frame style={{ textAlign: 'center' }}>
+  <img src="/images/quickstart-approve.png" width="500" />
+</Frame>
+
+## トラブルシューティング
+
+<AccordionGroup>
+<Accordion title="サーバーがClaudeに表示されない/ハンマーアイコンが見つからない">
+  1. Claude for Desktopを完全に再起動します
+  2. `claude_desktop_config.json`ファイルの構文を確認します
+  3. `claude_desktop_config.json`に含まれるファイルパスが有効であり、絶対パスであることを確認します
+  4. サーバーが接続されない理由を確認するために[ログ](#getting-logs-from-claude-for-desktop)を確認します
+  5. コマンドラインで、サーバーを手動で実行して（`claude_desktop_config.json`で行ったように`username`を置き換えて）、エラーが発生するかどうかを確認します：
+<Tabs>
+<Tab title="MacOS/Linux">
+```bash
+npx -y @modelcontextprotocol/server-filesystem /Users/username/Desktop /Users/username/Downloads
+```
+</Tab>
+<Tab title="Windows">
+```bash
+npx -y @modelcontextprotocol/server-filesystem C:\Users\username\Desktop C:\Users\username\Downloads
+```
+</Tab>
+</Tabs>
+</Accordion>
+<Accordion title="Claude for Desktopからのログの取得">
+  Claude.appに関連するMCPのログは次の場所に書き込まれます：
+  - macOS: `~/Library/Logs/Claude`
+  - Windows: `%APPDATA%\Claude\logs`
+
+  - `mcp.log`には、MCP接続と接続失敗に関する一般的なログが含まれます。
+  - `mcp-server-SERVERNAME.log`という名前のファイルには、指定されたサーバーからのエラーログ（stderr）が含まれます。
+
+  次のコマンドを実行して、最近のログをリストし、新しいログをフォローします（Windowsでは、最近のログのみが表示されます）：
+<Tabs>
+<Tab title="MacOS/Linux">
+```bash
+# Claudeのログをエラーのために確認
+ tail -n 20 -f ~/Library/Logs/Claude/mcp*.log
+```
+</Tab>
+<Tab title="Windows">
+```bash
+type "%APPDATA%\Claude\logs\mcp*.log"
+```
+</Tab>
+</Tabs>
+</Accordion>
+<Accordion title="ツール呼び出しが静かに失敗する">
+  Claudeがツールを使用しようとするが失敗する場合：
+
+  1. Claudeのログをエラーのために確認します
+  2. サーバーがエラーなしでビルドおよび実行されることを確認します
+  3. Claude for Desktopを再起動してみてください
+</Accordion>
+<Accordion title="これがすべて機能しない場合はどうすればよいですか？">
+  [デバッグガイド](/docs/tools/debugging)を参照して、より良いデバッグツールと詳細なガイダンスを得てください。
+</Accordion>
+<Accordion title="ENOENTエラーとWindowsのパスにおける`${APPDATA}`">
+設定されたサーバーがロードに失敗し、ログにパス内の`${APPDATA}`に関するエラーが表示される場合は、`claude_desktop_config.json`の`env`キーに`%APPDATA%`の展開された値を追加する必要があるかもしれません：
+
+```json
+{
+  "brave-search": {
+    "command": "npx",
+    "args": ["-y", "@modelcontextprotocol/server-brave-search"],
+    "env": {
+      "APPDATA": "C:\\Users\\user\\AppData\\Roaming\\",
+      "BRAVE_API_KEY": "..."
+    }
+  }
+}
+```
+
+この変更を行った後、Claude Desktopを再度起動します。
+
+<Warning>
+**NPMはグローバルにインストールされている必要があります**
+
+`npx`コマンドは、NPMがグローバルにインストールされていない場合、引き続き失敗する可能性があります。NPMがすでにグローバルにインストールされている場合、システムに`%APPDATA%\npm`が存在します。そうでない場合は、次のコマンドを実行してNPMをグローバルにインストールできます：
+
+```bash
+npm install -g npm
+```
+</Warning>
+
+</Accordion>
+</AccordionGroup>
+
+## 次のステップ
+<CardGroup cols={2}>
+  <Card
+    title="他のサーバーを探る"
+    icon="grid"
+    href="/examples"
+  >
+    公式のMCPサーバーと実装のギャラリーをチェックする
+  </Card>
+  <Card
+    title="独自のサーバーを構築する"
+    icon="code"
+    href="/quickstart/server"
+  >
+    Claude for Desktopや他のクライアントで使用するための独自のカスタムサーバーを構築する
+  </Card>
+</CardGroup> 

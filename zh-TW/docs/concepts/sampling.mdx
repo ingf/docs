@@ -1,0 +1,245 @@
+---
+title: "Sampling"
+description: "Let your servers request completions from LLMs"
+---
+
+Sampling 是一項強大的 MCP 功能，允許伺服器透過用戶端請求 LLM 完成，在維持安全性和隱私的同時，實現複雜的代理行為。
+
+<Info>
+  MCP 的此功能尚不支援於 Claude Desktop client。
+</Info>
+
+## How sampling works
+
+取樣流程遵循以下步驟：
+
+1. 伺服器發送 `sampling/createMessage` 請求至用戶端
+2. 用戶端審查請求並可修改它
+3. 用戶端從 LLM 取樣
+4. 用戶端審查完成結果
+5. 用戶端將結果返回至伺服器
+
+這種人機迴路設計確保使用者保持對 LLM 所見和所產生的內容的控制。
+
+## Message format
+
+取樣請求使用標準化的訊息格式：
+
+```typescript
+{
+  messages: [
+    {
+      role: "user" | "assistant",
+      content: {
+        type: "text" | "image",
+
+        // For text:
+        text?: string,
+
+        // For images:
+        data?: string,             // base64 encoded
+        mimeType?: string
+      }
+    }
+  ],
+  modelPreferences?: {
+    hints?: [{
+      name?: string                // Suggested model name/family
+    }],
+    costPriority?: number,         // 0-1, importance of minimizing cost
+    speedPriority?: number,        // 0-1, importance of low latency
+    intelligencePriority?: number  // 0-1, importance of capabilities
+  },
+  systemPrompt?: string,
+  includeContext?: "none" | "thisServer" | "allServers",
+  temperature?: number,
+  maxTokens: number,
+  stopSequences?: string[],
+  metadata?: Record<string, unknown>
+}
+```
+
+## Request parameters
+
+### Messages
+
+`messages` 陣列包含要發送給 LLM 的對話歷史記錄。每個訊息都有：
+
+- `role`: "user" 或 "assistant"
+- `content`: 訊息內容，可以是：
+  - 具有 `text` 欄位的文字內容
+  - 具有 `data` (base64) 和 `mimeType` 欄位的圖像內容
+
+### Model preferences
+
+`modelPreferences` 物件允許伺服器指定其模型選擇偏好：
+
+- `hints`: 用戶端可用於選擇合適模型的模型名稱建議陣列：
+  - `name`: 可以匹配完整或部分模型名稱的字串 (例如 "claude-3", "sonnet")
+  - 用戶端可能會將提示映射到來自不同供應商的等效模型
+  - 多個提示按偏好順序評估
+
+- 優先級值（0-1 正規化）：
+  - `costPriority`: 最小化成本的重要性
+  - `speedPriority`: 低延遲回應的重要性
+  - `intelligencePriority`: 進階模型能力的重要性
+
+用戶端根據這些偏好及其可用的模型進行最終模型選擇。
+
+### System prompt
+
+可選的 `systemPrompt` 欄位允許伺服器請求特定的系統提示。用戶端可以修改或忽略此項。
+
+### Context inclusion
+
+`includeContext` 參數指定要包含的 MCP 上下文：
+
+- `"none"`: 無額外上下文
+- `"thisServer"`: 包含來自請求伺服器的上下文
+- `"allServers"`: 包含來自所有已連接 MCP 伺服器的上下文
+
+用戶端控制實際包含的上下文。
+
+### Sampling parameters
+
+使用以下項目微調 LLM 取樣：
+
+- `temperature`: 控制隨機性 (0.0 到 1.0)
+- `maxTokens`: 要產生的最大 token 數
+- `stopSequences`: 停止產生的序列陣列
+- `metadata`: 其他供應商特定的參數
+
+## Response format
+
+用戶端返回完成結果：
+
+```typescript
+{
+  model: string,  // Name of the model used
+  stopReason?: "endTurn" | "stopSequence" | "maxTokens" | string,
+  role: "user" | "assistant",
+  content: {
+    type: "text" | "image",
+    text?: string,
+    data?: string,
+    mimeType?: string
+  }
+}
+```
+
+## Example request
+
+以下是從用戶端請求取樣的範例：
+```json
+{
+  "method": "sampling/createMessage",
+  "params": {
+    "messages": [
+      {
+        "role": "user",
+        "content": {
+          "type": "text",
+          "text": "What files are in the current directory?"
+        }
+      }
+    ],
+    "systemPrompt": "You are a helpful file system assistant.",
+    "includeContext": "thisServer",
+    "maxTokens": 100
+  }
+}
+```
+
+## Best practices
+
+實作取樣時：
+
+1. 始終提供清晰、結構良好的提示
+2. 適當處理文字和圖像內容
+3. 設定合理的 token 限制
+4. 透過 `includeContext` 包含相關上下文
+5. 在使用前回覆驗證
+6. 優雅地處理錯誤
+7. 考慮速率限制取樣請求
+8. 記錄預期的取樣行為
+9. 使用各種模型參數進行測試
+10. 監控取樣成本
+
+## Human in the loop controls
+
+取樣的設計考慮到人工監督：
+
+### For prompts
+
+- 用戶端應向使用者顯示建議的提示
+- 使用者應能夠修改或拒絕提示
+- 系統提示可以被過濾或修改
+- 上下文包含由用戶端控制
+
+### For completions
+
+- 用戶端應向使用者顯示完成結果
+- 使用者應能夠修改或拒絕完成結果
+- 用戶端可以過濾或修改完成結果
+- 使用者控制使用哪個模型
+
+## Security considerations
+
+實作取樣時：
+
+- 驗證所有訊息內容
+- 清理敏感資訊
+- 實作適當的速率限制
+- 監控取樣使用情況
+- 加密傳輸中的資料
+- 處理使用者資料隱私
+- 稽核取樣請求
+- 控制成本暴露
+- 實作逾時
+- 優雅地處理模型錯誤
+
+## Common patterns
+
+### Agentic workflows
+
+取樣實現了代理模式，例如：
+
+- 讀取和分析資源
+- 根據上下文做出決策
+- 產生結構化資料
+- 處理多步驟任務
+- 提供互動式協助
+
+### Context management
+
+上下文的最佳實踐：
+
+- 請求最少必要的上下文
+- 清晰地結構化上下文
+- 處理上下文大小限制
+- 根據需要更新上下文
+- 清理過時的上下文
+
+### Error handling
+
+穩健的錯誤處理應：
+
+- 捕獲取樣失敗
+- 處理逾時錯誤
+- 管理速率限制
+- 驗證回覆
+- 提供後備行為
+- 適當地記錄錯誤
+
+## Limitations
+
+請注意以下限制：
+
+- 取樣取決於用戶端功能
+- 使用者控制取樣行為
+- 上下文大小有限制
+- 速率限制可能適用
+- 應考慮成本
+- 模型可用性各不相同
+- 回應時間各不相同
+- 並非支援所有內容類型

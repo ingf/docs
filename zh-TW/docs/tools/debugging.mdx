@@ -1,0 +1,281 @@
+---
+title: Debugging
+description: Model Context Protocol (MCP) 整合偵錯綜合指南
+---
+
+有效的偵錯對於開發 MCP 伺服器或將其與應用程式整合至關重要。本指南涵蓋 MCP 生態系統中可用的偵錯工具和方法。
+
+<Info>
+  本指南適用於 macOS。其他平台的指南即將推出。
+</Info>
+
+## 偵錯工具概覽
+
+MCP 提供多種工具，可在不同層級進行偵錯：
+
+1. **MCP Inspector**
+   - 互動式偵錯介面
+   - 直接伺服器測試
+   - 詳情請參閱 [Inspector guide](/docs/tools/inspector)
+
+2. **Claude Desktop Developer Tools**
+   - 整合測試
+   - 日誌收集
+   - Chrome DevTools 整合
+
+3. **Server Logging**
+   - 自訂日誌實作
+   - 錯誤追蹤
+   - 效能監控
+
+## 在 Claude Desktop 中偵錯
+
+### 檢查伺服器狀態
+
+Claude.app 介面提供基本的伺服器狀態資訊：
+
+1. 點擊 <img src="/images/claude-desktop-mcp-plug-icon.svg" style={{display: 'inline', margin: 0, height: '1.3em'}} /> 圖示以檢視：
+   - 已連線的伺服器
+   - 可用的 prompts 和 resources
+
+2. 點擊 <img src="/images/claude-desktop-mcp-hammer-icon.svg" style={{display: 'inline', margin: 0, height: '1.3em'}} /> 圖示以檢視：
+   - 提供給模型的 tools
+
+### 檢視日誌
+
+從 Claude Desktop 檢閱詳細的 MCP 日誌：
+
+```bash
+# Follow logs in real-time
+tail -n 20 -F ~/Library/Logs/Claude/mcp*.log
+```
+
+日誌捕捉：
+- 伺服器連線事件
+- Configuration issues
+- Runtime errors
+- Message exchanges
+
+### 使用 Chrome DevTools
+
+在 Claude Desktop 內存取 Chrome 的開發人員工具，以調查 client-side errors：
+
+1. 建立一個 `developer_settings.json` 檔案，並將 `allowDevTools` 設定為 true：
+
+```bash
+echo '{"allowDevTools": true}' > ~/Library/Application\ Support/Claude/developer_settings.json
+```
+
+2. 開啟 DevTools：`Command-Option-Shift-i`
+
+注意：您會看到兩個 DevTools 視窗：
+- Main content window
+- App title bar window
+
+使用 Console 面板來檢查 client-side errors。
+
+使用 Network 面板來檢查：
+- Message payloads
+- Connection timing
+
+## 常見問題
+
+### Working directory
+
+當將 MCP 伺服器與 Claude Desktop 搭配使用時：
+
+- 透過 `claude_desktop_config.json` 啟動的伺服器的工作目錄可能未定義（例如 macOS 上的 `/`），因為 Claude Desktop 可能從任何位置啟動
+- 始終在您的 configuration 和 `.env` 檔案中使用絕對路徑，以確保可靠的操作
+- 對於直接透過 command line 測試伺服器，工作目錄將是您執行命令的位置
+
+例如在 `claude_desktop_config.json` 中，使用：
+```json
+{
+  "command": "npx",
+  "args": ["-y", "@modelcontextprotocol/server-filesystem", "/Users/username/data"]
+}
+```
+而不是相對路徑，例如 `./data`
+
+### Environment variables
+
+MCP 伺服器僅自動繼承 environment variables 的子集，例如 `USER`、`HOME` 和 `PATH`。
+
+若要覆寫預設變數或提供您自己的變數，您可以在 `claude_desktop_config.json` 中指定 `env` 鍵：
+
+```json
+{
+  "myserver": {
+    "command": "mcp-server-myapp",
+    "env": {
+      "MYAPP_API_KEY": "some_key",
+    }
+  }
+}
+```
+
+### Server initialization
+
+常見的初始化問題：
+
+1. **Path Issues**
+   - 伺服器可執行檔路徑不正確
+   - 缺少必要檔案
+   - Permission problems
+   - 嘗試為 `command` 使用絕對路徑
+
+2. **Configuration Errors**
+   - JSON 語法無效
+   - 缺少必要欄位
+   - Type mismatches
+
+3. **Environment Problems**
+   - 缺少 environment variables
+   - 變數值不正確
+   - Permission restrictions
+
+### Connection problems
+
+當伺服器無法連線時：
+
+1. 檢查 Claude Desktop 日誌
+2. 驗證伺服器程序正在執行
+3. 使用 [Inspector](/docs/tools/inspector) 獨立測試
+4. 驗證 protocol 相容性
+
+## 實作 logging
+
+### Server-side logging
+
+當建置使用本機 stdio [transport](/docs/concepts/transports) 的伺服器時，所有記錄到 stderr（標準錯誤）的訊息都將由主機應用程式（例如 Claude Desktop）自動捕獲。
+
+<Warning>
+  本機 MCP 伺服器不應將訊息記錄到 stdout（標準輸出），因為這會干擾 protocol 操作。
+</Warning>
+
+對於所有 [transports](/docs/concepts/transports)，您也可以透過發送 log message notification 來向 client 提供 logging：
+
+<Tabs>
+  <Tab title="Python">
+    ```python
+    server.request_context.session.send_log_message(
+      level="info",
+      data="Server started successfully",
+    )
+    ```
+  </Tab>
+  <Tab title="TypeScript">
+    ```typescript
+    server.sendLoggingMessage({
+      level: "info",
+      data: "Server started successfully",
+    });
+    ```
+  </Tab>
+</Tabs>
+
+要記錄的重要事件：
+- Initialization steps
+- Resource access
+- Tool execution
+- Error conditions
+- Performance metrics
+
+### Client-side logging
+
+在 client applications 中：
+
+1. 啟用 debug logging
+2. 監控 network traffic
+3. 追蹤 message exchanges
+4. 記錄 error states
+
+## 偵錯工作流程
+
+### Development cycle
+
+1. Initial Development
+   - 使用 [Inspector](/docs/tools/inspector) 進行基本測試
+   - 實作核心功能
+   - 新增 logging points
+
+2. Integration Testing
+   - 在 Claude Desktop 中測試
+   - 監控日誌
+   - 檢查 error handling
+
+### 測試變更
+
+為了有效率地測試變更：
+
+- **Configuration changes**：重新啟動 Claude Desktop
+- **Server code changes**：使用 Command-R 重新載入
+- **Quick iteration**：在開發期間使用 [Inspector](/docs/tools/inspector)
+
+## 最佳實務
+
+### Logging strategy
+
+1. **Structured Logging**
+   - 使用一致的格式
+   - 包含 context
+   - 新增 timestamps
+   - 追蹤 request IDs
+
+2. **Error Handling**
+   - 記錄 stack traces
+   - 包含 error context
+   - 追蹤 error patterns
+   - 監控 recovery
+
+3. **Performance Tracking**
+   - 記錄 operation timing
+   - 監控 resource usage
+   - 追蹤 message sizes
+   - 測量 latency
+
+### Security considerations
+
+偵錯時：
+
+1. **Sensitive Data**
+   - 清理日誌
+   - 保護 credentials
+   - 遮罩 personal information
+
+2. **Access Control**
+   - 驗證 permissions
+   - 檢查 authentication
+   - 監控 access patterns
+
+## 取得協助
+
+當遇到問題時：
+
+1. **First Steps**
+   - 檢查伺服器日誌
+   - 使用 [Inspector](/docs/tools/inspector) 測試
+   - 檢閱 configuration
+   - 驗證 environment
+
+2. **Support Channels**
+   - GitHub issues
+   - GitHub discussions
+
+3. **Providing Information**
+   - 日誌摘錄
+   - Configuration files
+   - Steps to reproduce
+   - Environment details
+
+## 後續步驟
+
+<CardGroup cols={2}>
+  <Card
+    title="MCP Inspector"
+    icon="magnifying-glass"
+    href="/docs/tools/inspector"
+  >
+    了解如何使用 MCP Inspector
+  </Card>
+</CardGroup>

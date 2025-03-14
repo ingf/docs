@@ -1,0 +1,397 @@
+```
+---
+title: "傳輸"
+description: "了解 MCP 的通訊機制"
+---
+
+在模型上下文協定 (MCP) 中的傳輸，為客戶端和伺服器之間的通訊提供了基礎。傳輸處理訊息如何發送和接收的底層機制。
+
+## 訊息格式
+
+MCP 使用 [JSON-RPC](https://www.jsonrpc.org/) 2.0 作為其線路格式。傳輸層負責將 MCP 協定訊息轉換為 JSON-RPC 格式以進行傳輸，並將接收到的 JSON-RPC 訊息轉換回 MCP 協定訊息。
+
+有三種類型的 JSON-RPC 訊息被使用：
+
+### 請求
+```typescript
+{
+  jsonrpc: "2.0",
+  id: number | string,
+  method: string,
+  params?: object
+}
+```
+
+### 回應
+```typescript
+{
+  jsonrpc: "2.0",
+  id: number | string,
+  result?: object,
+  error?: {
+    code: number,
+    message: string,
+    data?: unknown
+  }
+}
+```
+
+### 通知
+```typescript
+{
+  jsonrpc: "2.0",
+  method: string,
+  params?: object
+}
+```
+
+## 內建傳輸類型
+
+MCP 包含兩種標準傳輸實作：
+
+### 標準輸入/輸出 (stdio)
+
+stdio 傳輸允許通過標準輸入和輸出流進行通訊。這對於本地整合和命令列工具特別有用。
+
+在以下情況下使用 stdio：
+- 建立命令列工具
+- 實作本地整合
+- 需要簡單的進程通訊
+- 使用 shell 腳本
+
+<Tabs>
+  <Tab title="TypeScript (伺服器)">
+    ```typescript
+    const server = new Server({
+      name: "example-server",
+      version: "1.0.0"
+    }, {
+      capabilities: {}
+    });
+
+    const transport = new StdioServerTransport();
+    await server.connect(transport);
+    ```
+  </Tab>
+  <Tab title="TypeScript (客戶端)">
+    ```typescript
+    const client = new Client({
+      name: "example-client",
+      version: "1.0.0"
+    }, {
+      capabilities: {}
+    });
+
+    const transport = new StdioClientTransport({
+      command: "./server",
+      args: ["--option", "value"]
+    });
+    await client.connect(transport);
+    ```
+  </Tab>
+  <Tab title="Python (伺服器)">
+    ```python
+    app = Server("example-server")
+
+    async with stdio_server() as streams:
+        await app.run(
+            streams[0],
+            streams[1],
+            app.create_initialization_options()
+        )
+    ```
+  </Tab>
+  <Tab title="Python (客戶端)">
+    ```python
+    params = StdioServerParameters(
+        command="./server",
+        args=["--option", "value"]
+    )
+
+    async with stdio_client(params) as streams:
+        async with ClientSession(streams[0], streams[1]) as session:
+            await session.initialize()
+    ```
+  </Tab>
+</Tabs>
+
+### 伺服器發送事件 (SSE)
+
+SSE 傳輸允許伺服器到客戶端的串流，並使用 HTTP POST 請求進行客戶端到伺服器的通訊。
+
+在以下情況下使用 SSE：
+- 只需要伺服器到客戶端的串流
+- 使用受限網路
+- 實作簡單的更新
+
+<Tabs>
+  <Tab title="TypeScript (伺服器)">
+    ```typescript
+    import express from "express";
+
+    const app = express();
+
+    const server = new Server({
+      name: "example-server",
+      version: "1.0.0"
+    }, {
+      capabilities: {}
+    });
+
+    let transport: SSEServerTransport | null = null;
+
+    app.get("/sse", (req, res) => {
+      transport = new SSEServerTransport("/messages", res);
+      server.connect(transport);
+    });
+
+    app.post("/messages", (req, res) => {
+      if (transport) {
+        transport.handlePostMessage(req, res);
+      }
+    });
+
+    app.listen(3000);
+    ```
+  </Tab>
+  <Tab title="TypeScript (客戶端)">
+    ```typescript
+    const client = new Client({
+      name: "example-client",
+      version: "1.0.0"
+    }, {
+      capabilities: {}
+    });
+
+    const transport = new SSEClientTransport(
+      new URL("http://localhost:3000/sse")
+    );
+    await client.connect(transport);
+    ```
+  </Tab>
+  <Tab title="Python (伺服器)">
+    ```python
+    from mcp.server.sse import SseServerTransport
+    from starlette.applications import Starlette
+    from starlette.routing import Route
+
+    app = Server("example-server")
+    sse = SseServerTransport("/messages")
+
+    async def handle_sse(scope, receive, send):
+        async with sse.connect_sse(scope, receive, send) as streams:
+            await app.run(streams[0], streams[1], app.create_initialization_options())
+
+    async def handle_messages(scope, receive, send):
+        await sse.handle_post_message(scope, receive, send)
+
+    starlette_app = Starlette(
+        routes=[
+            Route("/sse", endpoint=handle_sse),
+            Route("/messages", endpoint=handle_messages, methods=["POST"]),
+        ]
+    )
+    ```
+  </Tab>
+  <Tab title="Python (客戶端)">
+    ```python
+    async with sse_client("http://localhost:8000/sse") as streams:
+        async with ClientSession(streams[0], streams[1]) as session:
+            await session.initialize()
+    ```
+  </Tab>
+</Tabs>
+
+## 自訂傳輸
+
+MCP 使實作針對特定需求的自訂傳輸變得容易。任何傳輸實作只需要符合 Transport 介面：
+
+您可以為以下項目實作自訂傳輸：
+- 自訂網路協定
+- 專門的通訊通道
+- 與現有系統整合
+- 效能最佳化
+
+<Tabs>
+  <Tab title="TypeScript">
+    ```typescript
+    interface Transport {
+      // Start processing messages
+      start(): Promise<void>;
+
+      // Send a JSON-RPC message
+      send(message: JSONRPCMessage): Promise<void>;
+
+      // Close the connection
+      close(): Promise<void>;
+
+      // Callbacks
+      onclose?: () => void;
+      onerror?: (error: Error) => void;
+      onmessage?: (message: JSONRPCMessage) => void;
+    }
+    ```
+  </Tab>
+  <Tab title="Python">
+    請注意，雖然 MCP 伺服器通常使用 asyncio 實作，但我們建議使用 `anyio` 實作傳輸等底層介面，以獲得更廣泛的相容性。
+    ```python
+    @contextmanager
+    async def create_transport(
+        read_stream: MemoryObjectReceiveStream[JSONRPCMessage | Exception],
+        write_stream: MemoryObjectSendStream[JSONRPCMessage]
+    ):
+        """
+        Transport interface for MCP.
+
+        Args:
+            read_stream: Stream to read incoming messages from
+            write_stream: Stream to write outgoing messages to
+        """
+        async with anyio.create_task_group() as tg:
+            try:
+                # Start processing messages
+                tg.start_soon(lambda: process_messages(read_stream))
+
+                # Send messages
+                async with write_stream:
+                    yield write_stream
+
+            except Exception as exc:
+                # Handle errors
+                raise exc
+            finally:
+                # Clean up
+                tg.cancel_scope.cancel()
+                await write_stream.aclose()
+                await read_stream.aclose()
+    ```
+  </Tab>
+</Tabs>
+
+## 錯誤處理
+
+傳輸實作應處理各種錯誤情況：
+
+1. 連線錯誤
+2. 訊息解析錯誤
+3. 協定錯誤
+4. 網路逾時
+5. 資源清理
+
+錯誤處理範例：
+
+<Tabs>
+  <Tab title="TypeScript">
+    ```typescript
+    class ExampleTransport implements Transport {
+      async start() {
+        try {
+          // Connection logic
+        } catch (error) {
+          this.onerror?.(new Error(`Failed to connect: ${error}`));
+          throw error;
+        }
+      }
+
+      async send(message: JSONRPCMessage) {
+        try {
+          // Sending logic
+        } catch (error) {
+          this.onerror?.(new Error(`Failed to send message: ${error}`));
+          throw error;
+        }
+      }
+    }
+    ```
+  </Tab>
+  <Tab title="Python">
+  請注意，雖然 MCP 伺服器通常使用 asyncio 實作，但我們建議使用 `anyio` 實作傳輸等底層介面，以獲得更廣泛的相容性。
+    ```python
+    @contextmanager
+    async def example_transport(scope: Scope, receive: Receive, send: Send):
+        try:
+            # Create streams for bidirectional communication
+            read_stream_writer, read_stream = anyio.create_memory_object_stream(0)
+            write_stream, write_stream_reader = anyio.create_memory_object_stream(0)
+
+            async def message_handler():
+                try:
+                    async with read_stream_writer:
+                        # Message handling logic
+                        pass
+                except Exception as exc:
+                    logger.error(f"Failed to handle message: {exc}")
+                    raise exc
+
+            async with anyio.create_task_group() as tg:
+                tg.start_soon(message_handler)
+                try:
+                    # Yield streams for communication
+                    yield read_stream, write_stream
+                except Exception as exc:
+                    logger.error(f"Transport error: {exc}")
+                    raise exc
+                finally:
+                    tg.cancel_scope.cancel()
+                    await write_stream.aclose()
+                    await read_stream.aclose()
+        except Exception as exc:
+            logger.error(f"Failed to initialize transport: {exc}")
+            raise exc
+    ```
+  </Tab>
+</Tabs>
+
+## 最佳實踐
+
+在實作或使用 MCP 傳輸時：
+
+1. 正確處理連線生命週期
+2. 實作適當的錯誤處理
+3. 在連線關閉時清理資源
+4. 使用適當的逾時
+5. 在發送前驗證訊息
+6. 記錄傳輸事件以進行除錯
+7. 在適當的時候實作重新連線邏輯
+8. 處理訊息佇列中的背壓
+9. 監控連線健康狀況
+10. 實作適當的安全措施
+
+## 安全考量
+
+在實作傳輸時：
+
+### 身份驗證和授權
+- 實作適當的身份驗證機制
+- 驗證客戶端憑證
+- 使用安全的令牌處理
+- 實作授權檢查
+```
+### 資料安全
+- 使用 TLS 進行網路傳輸
+- 加密敏感資料
+- 驗證訊息完整性
+- 實作訊息大小限制
+- 清理輸入資料
+
+### 網路安全
+- 實作速率限制
+- 使用適當的逾時
+- 處理阻斷服務情境
+- 監控異常模式
+- 實作適當的防火牆規則
+
+## 偵錯傳輸
+
+偵錯傳輸問題的提示：
+
+1. 啟用偵錯日誌
+2. 監控訊息流
+3. 檢查連線狀態
+4. 驗證訊息格式
+5. 測試錯誤情境
+6. 使用網路分析工具
+7. 實作健康檢查
+8. 監控資源使用量
+9. 測試邊緣案例
+10. 使用適當的錯誤追蹤

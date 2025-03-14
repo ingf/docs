@@ -1,0 +1,251 @@
+---
+title: "トランスポート"
+description: "MCPの通信メカニズムについて学ぶ"
+---
+
+Model Context Protocol (MCP) のトランスポートは、クライアントとサーバー間の通信の基盤を提供します。トランスポートは、メッセージの送受信の基礎的なメカニズムを処理します。
+
+## メッセージフォーマット
+
+MCPは[JSON-RPC](https://www.jsonrpc.org/) 2.0をワイヤフォーマットとして使用します。トランスポート層は、MCPプロトコルメッセージをJSON-RPCフォーマットに変換して送信し、受信したJSON-RPCメッセージをMCPプロトコルメッセージに変換します。
+
+使用されるJSON-RPCメッセージには3種類あります：
+
+### リクエスト
+```typescript
+{
+  jsonrpc: "2.0",
+  id: number | string,
+  method: string,
+  params?: object
+}
+```
+
+### レスポンス
+```typescript
+{
+  jsonrpc: "2.0",
+  id: number | string,
+  result?: object,
+  error?: {
+    code: number,
+    message: string,
+    data?: unknown
+  }
+}
+```
+
+### 通知
+```typescript
+{
+  jsonrpc: "2.0",
+  method: string,
+  params?: object
+}
+```
+
+## 組み込みトランスポートタイプ
+
+MCPには2つの標準トランスポート実装が含まれています：
+
+### 標準入力/出力 (stdio)
+
+stdioトランスポートは、標準入力と出力ストリームを通じて通信を可能にします。これは、ローカル統合やコマンドラインツールに特に有用です。
+
+stdioを使用する場合：
+- コマンドラインツールを構築する
+- ローカル統合を実装する
+- 単純なプロセス通信が必要
+- シェルスクリプトを使用する
+
+<Tabs>
+  <Tab title="TypeScript (Server)">
+    ```typescript
+    const server = new Server({
+      name: "example-server",
+      version: "1.0.0"
+    }, {
+      capabilities: {}
+    });
+
+    const transport = new StdioServerTransport();
+    await server.connect(transport);
+    ```
+  </Tab>
+  <Tab title="TypeScript (Client)">
+    ```typescript
+    const client = new Client({
+      name: "example-client",
+      version: "1.0.0"
+    }, {
+      capabilities: {}
+    });
+
+    const transport = new StdioClientTransport({
+      command: "./server",
+      args: ["--option", "value"]
+    });
+    await client.connect(transport);
+    ```
+  </Tab>
+  <Tab title="Python (Server)">
+    ```python
+    app = Server("example-server")
+
+    async with stdio_server() as streams:
+        await app.run(
+            streams[0],
+            streams[1],
+            app.create_initialization_options()
+        )
+    ```
+  </Tab>
+  <Tab title="Python (Client)">
+    ```python
+    params = StdioServerParameters(
+        command="./server",
+        args=["--option", "value"]
+    )
+
+    async with stdio_client(params) as streams:
+        async with ClientSession(streams[0], streams[1]) as session:
+            await session.initialize()
+    ```
+  </Tab>
+</Tabs>
+
+### Server-Sent Events (SSE)
+
+SSEトランスポートは、HTTP POSTリクエストを使用してクライアントからサーバーへの通信を行い、サーバーからクライアントへのストリーミングを可能にします。
+
+SSEを使用する場合：
+- サーバーからクライアントへのストリーミングのみが必要
+- 制限されたネットワークで作業する
+- 単純な更新を実装する
+
+<Tabs>
+  <Tab title="TypeScript (Server)">
+    ```typescript
+    import express from "express";
+    
+    const app = express();
+    
+    const server = new Server({
+      name: "example-server",
+      version: "1.0.0"
+    }, {
+      capabilities: {}
+    });
+    
+    let transport: SSEServerTransport | null = null;
+
+    app.get("/sse", (req, res) => {
+      transport = new SSEServerTransport("/messages", res);
+      server.connect(transport);
+    });
+
+    app.post("/messages", (req, res) => {
+      if (transport) {
+        transport.handlePostMessage(req, res);
+      }
+    });
+
+    app.listen(3000);
+    ```
+  </Tab>
+  <Tab title="TypeScript (Client)">
+    ```typescript
+    const client = new Client({
+      name: "example-client",
+      version: "1.0.0"
+    }, {
+      capabilities: {}
+    });
+
+    const transport = new SSEClientTransport(
+      new URL("http://localhost:3000/sse")
+    );
+    await client.connect(transport);
+    ```
+  </Tab>
+  <Tab title="Python (Server)">
+    ```python
+    from mcp.server.sse import SseServerTransport
+    from starlette.applications import Starlette
+    from starlette.routing import Route
+
+    app = Server("example-server")
+    sse = SseServerTransport("/messages")
+
+    async def handle_sse(scope, receive, send):
+        async with sse.connect_sse(scope, receive, send) as streams:
+            await app.run(streams[0], streams[1], app.create_initialization_options())
+
+    async def handle_messages(scope, receive, send):
+        await sse.handle_post_message(scope, receive, send)
+
+    starlette_app = Starlette(
+        routes=[
+            Route("/sse", endpoint=handle_sse),
+            Route("/messages", endpoint=handle_messages, methods=["POST"]),
+        ]
+    )
+    ```
+  </Tab>
+  <Tab title="Python (Client)">
+    ```python
+    async with sse_client("http://localhost:8000/sse") as streams:
+        async with ClientSession(streams[0], streams[1]) as session:
+            await session.initialize()
+    ```
+  </Tab>
+</Tabs>
+
+## カスタムトランスポート
+
+MCPは、特定のニーズに合わせたカスタムトランスポートの実装を容易にします。任意のトランスポート実装は、Transportインターフェースに準拠する必要があります：
+
+カスタムトランスポートを実装する場合：
+- カスタムネットワークプロトコル
+- 特殊な通信チャネル
+- 既存システムとの統合
+- パフォーマンス最適化
+
+<Tabs>
+  <Tab title="TypeScript">
+    ```typescript
+    interface Transport {
+      // メッセージの処理を開始
+      start(): Promise<void>;
+
+      // JSON-RPCメッセージを送信
+      send(message: JSONRPCMessage): Promise<void>;
+
+      // 接続を閉じる
+      close(): Promise<void>;
+
+      // コールバック
+      onclose?: () => void;
+      onerror?: (error: Error) => void;
+      onmessage?: (message: JSONRPCMessage) => void;
+    }
+    ```
+  </Tab>
+  <Tab title="Python">
+    MCPサーバーはしばしばasyncioで実装されますが、より広い互換性のためにトランスポートのような低レベルのインターフェースを`anyio`で実装することをお勧めします。
+    ```python
+    @contextmanager
+    async def create_transport(
+        read_stream: MemoryObjectReceiveStream[JSONRPCMessage | Exception],
+        write_stream: MemoryObjectSendStream[JSONRPCMessage]
+    ):
+        """
+        MCPのトランスポートインターフェース。
+
+        Args:
+            read_stream: 受信メッセージを読み取るストリーム
+            write_stream: 送信メッセージを書き込むストリーム
+        """
+        async with anyio.create_task_group() as tg:
+    ```
+</Tabs> 

@@ -1,0 +1,144 @@
+---
+title: インスペクター
+description: Model Context ProtocolサーバーのテストとデバッグのためのMCPインスペクターの使用に関する詳細ガイド
+---
+
+[MCPインスペクター](https://github.com/modelcontextprotocol/inspector)は、MCPサーバーのテストとデバッグのためのインタラクティブな開発者ツールです。[デバッグガイド](/docs/tools/debugging)では、インスペクターを含むデバッグツールキット全体をカバーしていますが、このドキュメントではインスペクターの機能と能力を詳しく探ります。
+
+## 始めに
+
+### インストールと基本的な使用法
+
+インスペクターは`npx`を通じて直接実行され、インストールは不要です：
+
+
+```bash
+npx @modelcontextprotocol/inspector <command>
+```
+
+```bash
+npx @modelcontextprotocol/inspector <command> <arg1> <arg2>
+```
+
+#### NPMまたはPyPiからのサーバーの検査
+
+[NPM](https://npmjs.com)または[PyPi](https://pypi.com)からサーバーパッケージを開始する一般的な方法です。
+
+<Tabs>
+
+  <Tab title="NPMパッケージ">
+  ```bash
+  npx -y @modelcontextprotocol/inspector npx <package-name> <args>
+  # 例
+  npx -y @modelcontextprotocol/inspector npx server-postgres postgres://127.0.0.1/testdb
+  ```
+  </Tab>
+
+  <Tab title="PyPiパッケージ">
+  ```bash
+  npx @modelcontextprotocol/inspector uvx <package-name> <args>
+  # 例
+  npx @modelcontextprotocol/inspector uvx mcp-server-git --repository ~/code/mcp/servers.git
+  ```
+  </Tab>
+</Tabs>
+
+#### ローカルで開発されたサーバーの検査
+
+ローカルで開発されたサーバーやリポジトリとしてダウンロードされたサーバーを検査する最も一般的な方法は次のとおりです：
+
+<Tabs>
+  <Tab title="TypeScript">
+  ```bash
+  npx @modelcontextprotocol/inspector node path/to/server/index.js args...
+  ```
+  </Tab>
+  <Tab title="Python">
+  ```bash
+  npx @modelcontextprotocol/inspector \
+    uv \
+    --directory path/to/server \
+    run \
+    package-name \
+    args...
+  ```
+  </Tab>
+</Tabs>
+
+添付されたREADMEを注意深く読み、最も正確な指示を確認してください。
+
+## 機能概要
+
+<Frame caption="MCPインスペクターのインターフェース">
+  <img src="/images/mcp-inspector.png" />
+</Frame>
+
+インスペクターは、MCPサーバーと対話するためのいくつかの機能を提供します：
+
+### サーバー接続ペイン
+- サーバーに接続するための[トランスポート](/docs/concepts/transports)を選択できます
+- ローカルサーバーの場合、コマンドライン引数と環境のカスタマイズをサポートします
+
+### リソースタブ
+- 利用可能なすべてのリソースを一覧表示
+- リソースメタデータ（MIMEタイプ、説明）を表示
+- リソースコンテンツの検査を可能に
+- サブスクリプションテストをサポート
+
+### プロンプトタブ
+- 利用可能なプロンプトテンプレートを表示
+- プロンプトの引数と説明を表示
+- カスタム引数を使用したプロンプトテストを可能に
+- 生成されたメッセージをプレビュー
+
+### ツールタブ
+- 利用可能なツールを一覧表示
+- ツールのスキーマと説明を表示
+- カスタム入力を使用したツールテストを可能に
+- ツール実行結果を表示
+
+### 通知ペイン
+- サーバーから記録されたすべてのログを表示
+- サーバーから受信した通知を表示
+
+## ベストプラクティス
+
+### 開発ワークフロー
+
+1. 開発の開始
+   - インスペクターをサーバーと共に起動
+   - 基本的な接続性を確認
+   - 機能交渉を確認
+
+2. 反復テスト
+   - サーバーの変更を行う
+   - サーバーを再構築
+   - インスペクターを再接続
+   - 影響を受けた機能をテスト
+   - メッセージを監視
+
+3. エッジケースのテスト
+   - 無効な入力
+   - プロンプト引数の欠如
+   - 同時操作
+   - エラーハンドリングとエラーレスポンスを確認
+
+## 次のステップ
+
+<CardGroup cols={2}>
+    <Card
+        title="インスペクターレポジトリ"
+        icon="github"
+        href="https://github.com/modelcontextprotocol/inspector"
+    >
+        MCPインスペクターのソースコードをチェック
+    </Card>
+
+    <Card
+        title="デバッグガイド"
+        icon="bug"
+        href="/docs/tools/debugging"
+    >
+        より広範なデバッグ戦略について学ぶ
+    </Card>
+</CardGroup> 

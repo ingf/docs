@@ -1,0 +1,244 @@
+---
+title: "面向 Claude Desktop 用戶"
+description: "開始在 Claude for Desktop 中使用預構建的服務器。"
+---
+
+在本教程中，您將擴展 [Claude for Desktop](https://claude.ai/download)，使其能夠從您的計算機文件系統讀取、寫入新文件、移動文件，甚至搜索文件。
+
+<Frame>
+  <img src="/images/quickstart-filesystem.png" />
+</Frame>
+
+別擔心 — 在執行這些操作之前，它會徵求您的許可！
+
+## 1. 下載 Claude for Desktop
+
+首先下載 [Claude for Desktop](https://claude.ai/download)，選擇 macOS 或 Windows。（Claude for Desktop 尚不支持 Linux。）
+
+按照安裝說明進行操作。
+
+如果您已經安裝了 Claude for Desktop，請確保它是最新版本，方法是點擊計算機上的 Claude 菜單並選擇"檢查更新..."
+
+<Accordion title="為什麼是 Claude for Desktop 而不是 Claude.ai？">
+  因為服務器是本地運行的，MCP 目前只支持桌面主機。遠程主機正在積極開發中。
+</Accordion>
+
+## 2. 添加文件系統 MCP 服務器
+
+為了添加這個文件系統功能，我們將在 Claude for Desktop 中安裝一個預構建的[文件系統 MCP 服務器](https://github.com/modelcontextprotocol/servers/tree/main/src/filesystem)。這是 Anthropic 和社區創建的數十個[服務器](https://github.com/modelcontextprotocol/servers/tree/main)之一。
+
+首先，打開計算機上的 Claude 菜單並選擇"設置..."。請注意，這些不是應用程序窗口本身中的 Claude 帳戶設置。
+
+在 Mac 上，它應該看起來像這樣：
+<Frame style={{ textAlign: 'center' }}>
+  <img src="/images/quickstart-menu.png" width="400" />
+</Frame>
+
+在設置窗格的左側欄中點擊"開發者"，然後點擊"編輯配置"：
+<Frame>
+  <img src="/images/quickstart-developer.png" />
+</Frame>
+
+如果您還沒有配置文件，這將在以下位置創建一個配置文件：
+- macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`
+- Windows: `%APPDATA%\\Claude\\claude_desktop_config.json`
+
+並將在您的文件系統中顯示該文件。
+
+在任何文本編輯器中打開配置文件。用以下內容替換文件內容：
+<Tabs>
+<Tab title="MacOS/Linux">
+```json
+{
+  "mcpServers": {
+    "filesystem": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-filesystem",
+        "/Users/username/Desktop",
+        "/Users/username/Downloads"
+      ]
+    }
+  }
+}
+```
+</Tab>
+<Tab title="Windows">
+```json
+{
+  "mcpServers": {
+    "filesystem": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-filesystem",
+        "C:\\Users\\username\\Desktop",
+        "C:\\Users\\username\\Downloads"
+      ]
+    }
+  }
+}
+```
+</Tab>
+</Tabs>
+
+確保將 `username` 替換為您計算機的用戶名。路徑應指向您希望 Claude 能夠訪問和修改的有效目錄。它設置為適用於桌面和下載文件夾，但您也可以添加更多路徑。
+
+您還需要在計算機上安裝 [Node.js](https://nodejs.org) 才能正常運行。要驗證您是否已安裝 Node，請打開計算機上的命令行。
+- 在 macOS 上，從應用程序文件夾打開終端
+- 在 Windows 上，按 Windows + R，輸入 "cmd"，然後按 Enter
+
+進入命令行後，通過輸入以下命令驗證您是否已安裝 Node：
+```bash
+node --version
+```
+如果您收到"找不到命令"或"無法識別 node"的錯誤，請從 [nodejs.org](https://nodejs.org/) 下載 Node。
+
+<Tip>
+**配置文件如何工作？**
+
+此配置文件告訴 Claude for Desktop 每次啟動應用程序時要啟動哪些 MCP 服務器。在這種情況下，我們添加了一個名為"filesystem"的服務器，它將使用 Node `npx` 命令來安裝和運行 `@modelcontextprotocol/server-filesystem`。這個服務器（在[這裡](https://github.com/modelcontextprotocol/servers/tree/main/src/filesystem)描述）將允許您在 Claude for Desktop 中訪問您的文件系統。
+</Tip>
+
+<Warning>
+**命令權限**
+
+Claude for Desktop 將使用您的用戶帳戶的權限運行配置文件中的命令，並訪問您的本地文件。只有在您理解並信任來源的情況下才添加命令。
+</Warning>
+
+## 3. 重啟 Claude
+
+更新配置文件後，您需要重啟 Claude for Desktop。
+
+重啟後，您應該在輸入框的右下角看到一個錘子 <img src="/images/claude-desktop-mcp-hammer-icon.svg" style={{display: 'inline', margin: 0, height: '1.3em'}} /> 圖標：
+
+<Frame>
+  <img src="/images/quickstart-hammer.png" />
+</Frame>
+
+點擊錘子圖標後，您應該看到文件系統 MCP 服務器附帶的工具：
+
+<Frame style={{ textAlign: 'center' }}>
+  <img src="/images/quickstart-tools.png" width="400" />
+</Frame>
+
+如果 Claude for Desktop 沒有檢測到您的服務器，請轉到[故障排除](#troubleshooting)部分獲取調試提示。
+
+## 4. 試一試！
+
+現在您可以與 Claude 交談並詢問有關您的文件系統的問題。它應該知道何時調用相關工具。
+
+您可以嘗試詢問 Claude 的事項：
+- 你能寫一首詩並保存到我的桌面嗎？
+- 我的下載文件夾中有哪些與工作相關的文件？
+- 你能把我桌面上的所有圖片移動到一個名為"圖片"的新文件夾嗎？
+
+根據需要，Claude 將調用相關工具並在採取行動之前尋求您的批准：
+<Frame style={{ textAlign: 'center' }}>
+  <img src="/images/quickstart-approve.png" width="500" />
+</Frame>
+
+## 故障排除
+
+<AccordionGroup>
+<Accordion title="服務器未在 Claude 中顯示 / 錘子圖標缺失">
+  1. 完全重啟 Claude for Desktop
+  2. 檢查您的 `claude_desktop_config.json` 文件語法
+  3. 確保 `claude_desktop_config.json` 中包含的文件路徑有效，並且它們是絕對路徑而不是相對路徑
+  4. 查看[日誌](#getting-logs-from-claude-for-desktop)以了解服務器為何無法連接
+  5. 在命令行中，嘗試手動運行服務器（替換 `username`，就像您在 `claude_desktop_config.json` 中所做的那樣）以查看是否有任何錯誤：
+<Tabs>
+<Tab title="MacOS/Linux">
+```bash
+npx -y @modelcontextprotocol/server-filesystem /Users/username/Desktop /Users/username/Downloads
+```
+</Tab>
+<Tab title="Windows">
+```bash
+npx -y @modelcontextprotocol/server-filesystem C:\Users\username\Desktop C:\Users\username\Downloads
+```
+</Tab>
+</Tabs>
+</Accordion>
+<Accordion title="從 Claude for Desktop 獲取日誌">
+  與 MCP 相關的 Claude.app 日誌寫入以下位置的日誌文件：
+  - macOS: `~/Library/Logs/Claude`
+  - Windows: `%APPDATA%\\Claude\\logs`
+
+  - `mcp.log` 將包含有關 MCP 連接和連接失敗的一般日誌。
+  - 名為 `mcp-server-SERVERNAME.log` 的文件將包含來自命名服務器的錯誤（stderr）日誌。
+
+  您可以運行以下命令列出最近的日誌並跟踪任何新日誌（在 Windows 上，它只會顯示最近的日誌）：
+<Tabs>
+<Tab title="MacOS/Linux">
+```bash
+# 檢查 Claude 的日誌是否有錯誤
+tail -n 20 -f ~/Library/Logs/Claude/mcp*.log
+```
+</Tab>
+<Tab title="Windows">
+```bash
+type "%APPDATA%\Claude\logs\mcp*.log"
+```
+</Tab>
+</Tabs>
+</Accordion>
+<Accordion title="工具調用靜默失敗">
+  如果 Claude 嘗試使用工具但它們失敗：
+
+  1. 檢查 Claude 的日誌是否有錯誤
+  2. 驗證您的服務器構建和運行沒有錯誤
+  3. 嘗試重啟 Claude for Desktop
+</Accordion>
+<Accordion title="這些都不起作用。我該怎麼辦？">
+  請參考我們的[調試指南](/docs/tools/debugging)獲取更好的調試工具和更詳細的指導。
+</Accordion>
+<Accordion title="Windows 上的 ENOENT 錯誤和路徑中的 ${APPDATA}">
+如果您配置的服務器無法加載，並且您在其日誌中看到引用路徑中 `${APPDATA}` 的錯誤，您可能需要在 `claude_desktop_config.json` 的 `env` 鍵中添加 `%APPDATA%` 的展開值：
+
+```json
+{
+  "brave-search": {
+    "command": "npx",
+    "args": ["-y", "@modelcontextprotocol/server-brave-search"],
+    "env": {
+      "APPDATA": "C:\\Users\\user\\AppData\\Roaming\\",
+      "BRAVE_API_KEY": "..."
+    }
+  }
+}
+```
+
+進行此更改後，再次啟動 Claude Desktop。
+
+<Warning>
+**NPM 應全局安裝**
+
+如果您尚未全局安裝 NPM，`npx` 命令可能會繼續失敗。如果已全局安裝 NPM，您的系統上將存在 `%APPDATA%\\npm`。如果沒有，您可以通過運行以下命令全局安裝 NPM：
+
+```bash
+npm install -g npm
+```
+</Warning>
+
+</Accordion>
+</AccordionGroup>
+
+## 下一步
+<CardGroup cols={2}>
+  <Card
+    title="探索其他服務器"
+    icon="grid"
+    href="/examples"
+  >
+    查看我們的官方 MCP 服務器和實現庫
+  </Card>
+  <Card
+    title="構建您自己的服務器"
+    icon="code"
+    href="/quickstart/server"
+  >
+    現在構建您自己的自定義服務器，以在 Claude for Desktop 和其他客戶端中使用
+  </Card>
+</CardGroup>

@@ -1,0 +1,240 @@
+ ---
+title: "クライアント例"
+description: "MCPインテグレーションをサポートするアプリケーションのリスト"
+---
+
+このページでは、Model Context Protocol (MCP) をサポートするアプリケーションの概要を紹介します。各クライアントは異なるMCP機能をサポートしており、MCPサーバーとの統合レベルも様々です。
+
+## 機能サポート一覧
+
+| クライアント                                | [Resources] | [Prompts] | [Tools] | [Sampling] | Roots | メモ                                                                        |
+|---------------------------------------------|-------------|-----------|---------|------------|--------|-----------------------------------------------------------------------------|
+| [Claude Desktop App][Claude]                | ✅          | ✅        | ✅      | ❌         | ❌    | すべてのMCP機能を完全サポート                                               |
+| [5ire][5ire]                                | ❌          | ❌        | ✅      | ❌         | ❌    | ツールをサポート                                                           |
+| [BeeAI Framework][BeeAI Framework]          | ❌          | ❌        | ✅      | ❌         | ❌    | エージェントワークフローでツールをサポート                                 |
+| [Cline][Cline]                              | ✅          | ❌        | ✅      | ❌         | ❌    | ツールとリソースをサポート                                                 |
+| [Continue][Continue]                        | ✅          | ✅        | ✅      | ❌         | ❌    | すべてのMCP機能を完全サポート                                               |
+| [Cursor][Cursor]                            | ❌          | ❌        | ✅      | ❌         | ❌    | ツールをサポート                                                           |
+| [Emacs Mcp][Mcp.el]                         | ❌          | ❌        | ✅      | ❌         | ❌    | Emacsでツールをサポート                                                    |
+| [Firebase Genkit][Genkit]                   | ⚠️          | ✅        | ✅      | ❌         | ❌    | ツールを通じてリソースリストと検索をサポート                               |
+| [GenAIScript][GenAIScript]                  | ❌          | ❌        | ✅      | ❌         | ❌    | ツールをサポート                                                           |
+| [Goose][Goose]                              | ❌          | ❌        | ✅      | ❌         | ❌    | ツールをサポート                                                           |
+| [LibreChat][LibreChat]                      | ❌          | ❌        | ✅      | ❌         | ❌    | エージェント用のツールをサポート                                           |
+| [mcp-agent][mcp-agent]                      | ❌          | ❌        | ✅      | ⚠️         | ❌    | ツール、サーバー接続管理、エージェントワークフローをサポート               |
+| [Roo Code][Roo Code]                        | ✅          | ❌        | ✅      | ❌         | ❌    | ツールとリソースをサポート                                                 |
+| [Sourcegraph Cody][Cody]                    | ✅          | ❌        | ❌      | ❌         | ❌    | OpenCTXを通じてリソースをサポート                                         |
+| [Superinterface][Superinterface]            | ❌          | ❌        | ✅      | ❌         | ❌    | ツールをサポート                                                           |
+| [TheiaAI/TheiaIDE][TheiaAI/TheiaIDE]        | ❌          | ❌        | ✅      | ❌         | ❌    | Theia AIとAI搭載Theia IDEのエージェント用ツールをサポート                 |
+| [Windsurf Editor][Windsurf]                 | ❌          | ❌        | ✅      | ❌         | ❌    | 共同開発のためのAI Flowでツールをサポート                                  |
+| [Zed][Zed]                                  | ❌          | ✅        | ❌      | ❌         | ❌    | プロンプトがスラッシュコマンドとして表示                                   |
+| [OpenSumi][OpenSumi]                        | ❌          | ❌        | ✅      | ❌         | ❌    | OpenSumiでツールをサポート                                                |
+
+[Claude]: https://claude.ai/download
+[Cursor]: https://cursor.com
+[Zed]: https://zed.dev
+[Cody]: https://sourcegraph.com/cody
+[Genkit]: https://github.com/firebase/genkit
+[Continue]: https://github.com/continuedev/continue
+[GenAIScript]: https://microsoft.github.io/genaiscript/reference/scripts/mcp-tools/
+[Cline]: https://github.com/cline/cline
+[LibreChat]: https://github.com/danny-avila/LibreChat
+[TheiaAI/TheiaIDE]: https://eclipsesource.com/blogs/2024/12/19/theia-ide-and-theia-ai-support-mcp/
+[Superinterface]: https://superinterface.ai
+[5ire]: https://github.com/nanbingxyz/5ire
+[BeeAI Framework]: https://i-am-bee.github.io/beeai-framework
+[mcp-agent]: https://github.com/lastmile-ai/mcp-agent
+[Mcp.el]: https://github.com/lizqwerscott/mcp.el
+[Roo Code]: https://roocode.com
+[Goose]: https://block.github.io/goose/docs/goose-architecture/#interoperability-with-extensions
+[Windsurf]: https://codeium.com/windsurf
+
+[Resources]: https://modelcontextprotocol.io/docs/concepts/resources
+[Prompts]: https://modelcontextprotocol.io/docs/concepts/prompts
+[Tools]: https://modelcontextprotocol.io/docs/concepts/tools
+[Sampling]: https://modelcontextprotocol.io/docs/concepts/sampling
+
+## クライアントの詳細
+
+### Claude Desktop App
+Claudeデスクトップアプリケーションは、ローカルツールとデータソースとの深い統合を可能にする、包括的なMCPサポートを提供します。
+
+**主な機能:**
+- ローカルファイルやデータの添付を可能にするリソースの完全サポート
+- プロンプトテンプレートのサポート
+- コマンドやスクリプトを実行するためのツール統合
+- プライバシーとセキュリティを強化するローカルサーバー接続
+
+> ⓘ 注: Claude.ai ウェブアプリケーションは現在MCPをサポートしていません。MCP機能はデスクトップアプリケーションでのみ利用可能です。
+
+### 5ire
+[5ire](https://github.com/nanbingxyz/5ire)は、MCPサーバーを通じてツールをサポートするオープンソースのクロスプラットフォームデスクトップAIアシスタントです。
+
+**主な機能:**
+- 内蔵のMCPサーバーを素早く有効化・無効化できます。
+- 設定ファイルを変更することで、ユーザーは他のサーバーを追加できます。
+- オープンソースでユーザーフレンドリーであり、初心者に適しています。
+- 将来的にMCPのサポートは継続的に改善される予定です。
+
+### BeeAI Framework
+[BeeAI Framework](https://i-am-bee.github.io/beeai-framework)は、強力なエージェントワークフローの構築、デプロイ、大規模サービス提供のためのオープンソースフレームワークです。このフレームワークには、エージェントワークフローへのMCPサーバー統合を簡素化する**MCP Tool**というネイティブ機能が含まれています。
+
+**主な機能:**
+- MCPツールをエージェントワークフローにシームレスに組み込む。
+- 接続されたMCPクライアントからフレームワークネイティブツールを素早くインスタンス化する。
+- エージェント型MCP機能の将来的なサポートを予定。
+
+**詳細情報:**
+- [エージェントワークフローでMCPツールを使用する例](https://i-am-bee.github.io/beeai-framework/#/typescript/tools?id=using-the-mcptool-class)
+
+### Cline
+[Cline](https://github.com/cline/cline)は、VS Codeで動作する自律型コーディングエージェントで、ファイルの編集、コマンドの実行、ブラウザの使用など、各ステップでユーザーの許可を得て行います。
+
+**主な機能:**
+- 自然言語でツールを作成・追加（例：「ウェブを検索するツールを追加して」）
+- Clineが作成したカスタムMCPサーバーを `~/Documents/Cline/MCP` ディレクトリを通じて他の人と共有
+- 構成されたMCPサーバーとそのツール、リソース、エラーログを表示
+
+### Continue
+[Continue](https://github.com/continuedev/continue)は、すべてのMCP機能を組み込みでサポートするオープンソースのAIコードアシスタントです。
+
+**主な機能**
+- 「@」を入力してMCPリソースを参照
+- プロンプトテンプレートがスラッシュコマンドとして表示
+- 組み込みとMCPの両方のツールをチャットで直接使用
+- VS CodeとJetBrains IDEをサポートし、任意のLLMで動作
+
+### Cursor
+[Cursor](https://docs.cursor.com/advanced/model-context-protocol)はAIコードエディタです。
+
+**主な機能**:
+- Cursor ComposerでのMCPツールのサポート
+- STDIOとSSEの両方をサポート
+
+### Emacs Mcp
+[Emacs Mcp](https://github.com/lizqwerscott/mcp.el)は、MCPサーバーとインターフェースするために設計されたEmacsクライアントで、シームレスな接続と対話を可能にします。[gptel](https://github.com/karthink/gptel)や[llm](https://github.com/ahyatt/llm)などのAIプラグイン用にMCPツール呼び出しサポートを提供し、Emacsの標準ツール呼び出し形式に準拠しています。この統合により、Emacsエコシステム内のAIツールの機能が強化されます。
+
+**主な機能:**
+- Emacs用のMCPツールサポートを提供。
+
+### Firebase Genkit
+[Genkit](https://github.com/firebase/genkit)は、アプリケーションにGenAI機能を構築し統合するためのFirebaseのSDKです。[genkitx-mcp](https://github.com/firebase/genkit/tree/main/js/plugins/mcp)プラグインにより、クライアントとしてMCPサーバーを利用したり、GenkitのツールとプロンプトからMCPサーバーを作成したりすることができます。
+
+**主な機能:**
+- ツールとプロンプトのクライアントサポート（リソースは部分的にサポート）
+- Genkitの開発UIプレイグラウンドでのリッチなディスカバリー
+- Genkitの既存ツールとプロンプトとのシームレスな相互運用性
+- 主要プロバイダーからの幅広いGenAIモデルで動作
+
+### GenAIScript
+[GenAIScript](https://microsoft.github.io/genaiscript/)を使用してLLM用のプロンプトをプログラムで組み立てます（JavaScript使用）。JavaScriptでLLM、ツール、データをオーケストレーションします。
+
+**主な機能:**
+- プロンプトを扱うためのJavaScriptツールボックス
+- 簡単で生産的にするための抽象化
+- Visual Studio Codeとのシームレスな統合
+
+### Goose
+[Goose](https://github.com/block/goose)は、コーディングタスクを自動化してソフトウェア開発を強化するオープンソースのAIエージェントです。
+
+**主な機能:**
+- ツールを通じてGooseにMCP機能を公開。
+- MCPは[拡張ディレクトリ](https://block.github.io/goose/v1/extensions/)、CLI、またはUIを通じて直接インストール可能。
+- Gooseでは[独自のMCPサーバーを構築](https://block.github.io/goose/docs/tutorials/custom-extensions)して機能を拡張できます。
+- 開発、Webスクレイピング、自動化、メモリ、JetBrainsやGoogle Driveとの統合のための組み込みツールを含みます。
+
+### LibreChat
+[LibreChat](https://github.com/danny-avila/LibreChat)は、MCP統合を含む複数のAIプロバイダーをサポートするオープンソースのカスタマイズ可能なAIチャットUIです。
+
+**主な機能:**
+- MCPサーバーを通じて、[コードインタープリタ](https://www.librechat.ai/docs/features/code_interpreter)や画像生成ツールなどの現在のツールエコシステムを拡張
+- 主要プロバイダーからの様々なLLMを使用して、カスタマイズ可能な[エージェント](https://www.librechat.ai/docs/features/agents)にツールを追加
+- オープンソースでセルフホスト可能、安全なマルチユーザーサポート付き
+- 将来のロードマップには拡張されたMCP機能サポートが含まれる
+
+### mcp-agent
+[mcp-agent]は、Model Context Protocolを使用してエージェントを構築するためのシンプルで組み合わせ可能なフレームワークです。
+
+**主な機能:**
+- MCPサーバーの自動接続管理。
+- 複数のサーバーからのツールをLLMに公開。
+- [Building Effective Agents](https://www.anthropic.com/research/building-effective-agents)で定義されているすべてのパターンを実装。
+- 人間のフィードバックを待つなど、ワークフローの一時停止/再開シグナルをサポート。
+
+### Roo Code
+[Roo Code](https://roocode.com)は、MCP経由でAIコーディング支援を提供します。
+
+**主な機能:**
+- MCPツールとリソースのサポート
+- 開発ワークフローとの統合
+- 拡張可能なAI機能
+
+### Sourcegraph Cody
+[Cody](https://openctx.org/docs/providers/modelcontextprotocol)は、OpenCTXを通じてMCPを実装するSourcegraphのAIコーディングアシスタントです。
+
+**主な機能:**
+- MCPリソースのサポート
+- Sourcegraphのコードインテリジェンスとの統合
+- 抽象化層としてOpenCTXを使用
+- 追加のMCP機能のサポートを今後計画
+
+### Superinterface
+[Superinterface](https://superinterface.ai)は、MCP、インタラクティブコンポーネント、クライアント側の関数呼び出しなどをサポートするアプリ内AIアシスタントを構築するためのAIインフラストラクチャおよび開発者プラットフォームです。
+
+**主な機能:**
+- Reactコンポーネントやスクリプトタグを通じて埋め込まれたアシスタントでMCPサーバーからのツールを使用
+- SSEトランスポートのサポート
+- 任意のAIプロバイダー（OpenAI、Anthropic、Ollama、その他）からの任意のAIモデルを使用
+
+### TheiaAI/TheiaIDE
+[Theia AI](https://eclipsesource.com/blogs/2024/10/07/introducing-theia-ai/)はAI強化ツールとIDEを構築するためのフレームワークです。[AI搭載Theia IDE](https://eclipsesource.com/blogs/2024/10/08/introducting-ai-theia-ide/)はTheia AI上に構築されたオープンで柔軟な開発環境です。
+
+**主な機能:**
+- **ツール統合**: Theia AIにより、Theia IDEのものを含むAIエージェントがMCPサーバーを活用して、シームレスなツール連携が可能になります。
+- **カスタマイズ可能なプロンプト**: Theia IDEではユーザーがプロンプトを定義・適応でき、カスタマイズされたワークフロー向けにMCPサーバーを動的に統合できます。
+- **カスタムエージェント**: Theia IDEはMCP機能を活用するカスタムエージェントの作成をサポートし、ユーザーがその場で専用ワークフローを設計できるようにします。
+
+Theia AIとTheia IDEのMCP統合はユーザーに柔軟性を提供し、MCPを探索・適応するための強力なプラットフォームとなっています。
+
+**詳細情報:**
+- [Theia IDEとTheia AI MCP発表](https://eclipsesource.com/blogs/2024/12/19/theia-ide-and-theia-ai-support-mcp/)
+- [AI搭載Theia IDEのダウンロード](https://theia-ide.org/)
+
+### Windsurf Editor
+[Windsurf Editor](https://codeium.com/windsurf)は、AI支援と開発者ワークフローを組み合わせたエージェント型IDEです。開発者のコントロールを維持しながら、協調的かつ独立したAI連携を可能にする革新的なAI Flowシステムを特徴としています。
+
+**主な機能:**
+- 人間とAIのコラボレーションのための革新的なAI Flowパラダイム
+- インテリジェントなコード生成と理解
+- マルチモデルサポートを備えた豊富な開発ツール
+
+### Zed
+[Zed](https://zed.dev/docs/assistant/model-context-protocol)は、プロンプトテンプレートとツール統合に焦点を当てた、組み込みMCPサポートを持つ高性能コードエディタです。
+
+**主な機能:**
+- プロンプトテンプレートがエディタ内でスラッシュコマンドとして表示
+- 強化されたコーディングワークフロー用のツール統合
+- エディタ機能とワークスペースコンテキストとの緊密な統合
+- MCPリソースはサポートしていない
+
+### OpenSumi
+[OpenSumi](https://github.com/opensumi/core)は、AI Native IDE製品を素早く構築するのに役立つフレームワークです。
+
+**主な機能:**
+- OpenSumiでMCPツールをサポート
+- 組み込みIDEのMCPサーバーとカスタムMCPサーバーをサポート
+
+## アプリケーションへのMCPサポートの追加
+
+あなたのアプリケーションにMCPサポートを追加した場合、このリストに追加するためのプルリクエストを提出することをお勧めします。MCP統合は、ユーザーに強力なコンテキストAI機能を提供し、成長するMCPエコシステムの一部としてアプリケーションを位置付けることができます。
+
+MCPサポートを追加する利点:
+- ユーザーが独自のコンテキストとツールを持ち込めるようにする
+- 相互運用可能なAIアプリケーションの成長するエコシステムに参加する
+- ユーザーに柔軟な統合オプションを提供する
+- ローカルファーストのAIワークフローをサポートする
+
+アプリケーションにMCPを実装するための入門として、[Python](https://github.com/modelcontextprotocol/python-sdk)または[TypeScript SDKドキュメント](https://github.com/modelcontextprotocol/typescript-sdk)をご覧ください。
+
+## 更新と修正
+
+このリストはコミュニティによって管理されています。あなたのアプリケーションのMCPサポートに関する不正確な情報があったり、情報を更新したい場合は、プルリクエストを提出するか、[私たちのドキュメントリポジトリで問題を開いて](https://github.com/modelcontextprotocol/docs/issues)ください。

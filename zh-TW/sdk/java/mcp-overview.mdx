@@ -1,0 +1,167 @@
+---
+title: 概述
+description: Model Context Protocol (MCP) Java SDK 簡介
+---
+
+Java SDK 用於 [Model Context Protocol](https://modelcontextprotocol.org/docs/concepts/architecture)，
+實現 AI 模型和工具之間的標準化整合。
+
+## 功能特點
+
+- MCP 客戶端和 MCP 伺服器實現支援：
+  - 協議 [版本相容性協商](https://spec.modelcontextprotocol.io/specification/2024-11-05/basic/lifecycle/#initialization)
+  - [工具](https://spec.modelcontextprotocol.io/specification/2024-11-05/server/tools/) 發現、執行、列表變更通知
+  - [資源](https://spec.modelcontextprotocol.io/specification/2024-11-05/server/resources/) 管理與 URI 模板
+  - [根目錄](https://spec.modelcontextprotocol.io/specification/2024-11-05/client/roots/) 列表管理和通知
+  - [提示](https://spec.modelcontextprotocol.io/specification/2024-11-05/server/prompts/) 處理和管理
+  - [採樣](https://spec.modelcontextprotocol.io/specification/2024-11-05/client/sampling/) 支援 AI 模型互動
+- 多種傳輸實現：
+  - 預設傳輸：
+    - 基於標準輸入輸出的傳輸，用於基於進程的通信
+    - 基於 Java HttpClient 的 SSE 客戶端傳輸，用於 HTTP SSE 客戶端流式傳輸
+    - 基於 Servlet 的 SSE 伺服器傳輸，用於 HTTP SSE 伺服器流式傳輸
+  - 基於 Spring 的傳輸：
+    - WebFlux SSE 客戶端和伺服器傳輸，用於響應式 HTTP 流式傳輸
+    - WebMVC SSE 傳輸，用於基於 servlet 的 HTTP 流式傳輸
+- 支援同步和非同步程式設計範式
+
+## 架構
+
+SDK 遵循分層架構，明確分離關注點：
+
+![MCP 堆疊架構](/images/java/mcp-stack.svg)
+
+- **客戶端/伺服器層 (McpClient/McpServer)**：兩者都使用 McpSession 進行同步/非同步操作，
+McpClient 處理客戶端協議操作，McpServer 管理伺服器端協議操作。
+- **會話層 (McpSession)**：使用 DefaultMcpSession 實現管理通信模式和狀態。
+- **傳輸層 (McpTransport)**：處理 JSON-RPC 消息序列化/反序列化，通過：
+  - StdioTransport (標準輸入/輸出) 在核心模組中
+  - HTTP SSE 傳輸在專用傳輸模組中 (Java HttpClient, Spring WebFlux, Spring WebMVC)
+
+
+MCP 客戶端是 Model Context Protocol (MCP) 架構中的關鍵組件，負責建立和管理與 MCP 伺服器的連接。
+它實現了協議的客戶端部分。
+
+![Java MCP 客戶端架構](/images/java/java-mcp-client-architecture.jpg)
+
+MCP 伺服器是 Model Context Protocol (MCP) 架構中的基礎組件，為客戶端提供工具、資源和功能。
+它實現了協議的伺服器端部分。
+
+![Java MCP 伺服器架構](/images/java/java-mcp-server-architecture.jpg)
+
+關鍵互動：
+
+- **客戶端/伺服器初始化**：傳輸設置、協議相容性檢查、能力協商和實現細節交換。
+- **消息流**：JSON-RPC 消息處理，包括驗證、類型安全的響應處理和錯誤處理。
+- **資源管理**：資源發現、基於 URI 模板的訪問、訂閱系統和內容檢索。
+
+## 依賴項
+
+將以下 Maven 依賴項添加到您的專案中：
+
+<Tabs>
+  <Tab title="Maven">
+核心 MCP 功能：
+
+```xml
+<dependency>
+    <groupId>io.modelcontextprotocol.sdk</groupId>
+    <artifactId>mcp</artifactId>
+</dependency>
+```
+
+對於 HTTP SSE 傳輸實現，添加以下依賴項之一：
+
+```xml
+<!-- 基於 Spring WebFlux 的 SSE 客戶端和伺服器傳輸 -->
+<dependency>
+    <groupId>io.modelcontextprotocol.sdk</groupId>
+    <artifactId>mcp-spring-webflux</artifactId>
+</dependency>
+
+<!-- 基於 Spring WebMVC 的 SSE 伺服器傳輸 -->
+<dependency>
+    <groupId>io.modelcontextprotocol.sdk</groupId>
+    <artifactId>mcp-spring-webmvc</artifactId>
+</dependency>
+```
+  </Tab>
+    <Tab title="Gradle">
+    核心 MCP 功能：
+
+  ```groovy
+  dependencies {
+    implementation platform("io.modelcontextprotocol.sdk:mcp")
+    //...
+  }
+  ```
+
+    對於 HTTP SSE 傳輸實現，添加以下依賴項之一：
+
+    ```groovy
+    // 基於 Spring WebFlux 的 SSE 客戶端和伺服器傳輸
+    dependencies {
+      implementation platform("io.modelcontextprotocol.sdk:mcp-spring-webflux")
+    }
+
+    // 基於 Spring WebMVC 的 SSE 伺服器傳輸
+    dependencies {
+      implementation platform("io.modelcontextprotocol.sdk:mcp-spring-webmvc")
+    }
+    ```
+  </Tab>
+</Tabs>
+
+### 物料清單 (BOM)
+
+物料清單 (BOM) 聲明了特定版本推薦的所有依賴項版本。
+從應用程式的構建腳本中使用 BOM 可以避免您自己指定和維護依賴項版本的需要。
+相反，您使用的 BOM 版本決定了使用的依賴項版本。
+它還確保您默認使用受支援和經過測試的依賴項版本，除非您選擇覆蓋它們。
+
+將 BOM 添加到您的專案：
+
+<Tabs>
+  <Tab title="Maven">
+```xml
+<dependencyManagement>
+    <dependencies>
+        <dependency>
+            <groupId>io.modelcontextprotocol.sdk</groupId>
+            <artifactId>mcp-bom</artifactId>
+            <version>0.7.0</version>
+            <type>pom</type>
+            <scope>import</scope>
+        </dependency>
+    </dependencies>
+</dependencyManagement>
+```
+  </Tab>
+
+  <Tab title="Gradle">
+```groovy
+dependencies {
+  implementation platform("io.modelcontextprotocol.sdk:mcp-bom:0.7.0")
+  //...
+}
+```
+
+Gradle 用戶還可以通過利用 Gradle (5.0+) 原生支援使用 Maven BOM 聲明依賴項約束來使用 Spring AI MCP BOM。
+這是通過在 Gradle 構建腳本的依賴項部分添加 'platform' 依賴項處理方法來實現的。
+如上面的代碼片段所示，然後可以跟隨無版本聲明的 Starter 依賴項，用於您希望使用的一個或多個 spring-ai 模組，例如 spring-ai-openai。
+  </Tab>
+</Tabs>
+
+將版本號替換為您想要使用的 BOM 版本。
+
+### 可用依賴項
+
+以下依賴項可用並由 BOM 管理：
+
+- 核心依賴項 
+  - `io.modelcontextprotocol.sdk:mcp` - 核心 MCP 庫，提供 Model Context Protocol 實現的基本功能和 API。
+- 傳輸依賴項
+  - `io.modelcontextprotocol.sdk:mcp-spring-webflux` - 基於 WebFlux 的伺服器發送事件 (SSE) 傳輸實現，用於響應式應用程式。
+  - `io.modelcontextprotocol.sdk:mcp-spring-webmvc` - 基於 WebMVC 的伺服器發送事件 (SSE) 傳輸實現，用於基於 servlet 的應用程式。
+- 測試依賴項
+  - `io.modelcontextprotocol.sdk:mcp-test` - MCP 基於應用程式的測試工具和支援。

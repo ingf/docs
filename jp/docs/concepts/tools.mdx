@@ -1,0 +1,260 @@
+---
+title: "ツール"
+description: "サーバーを通じてLLMがアクションを実行できるようにする"
+---
+
+ツールは、Model Context Protocol (MCP) における強力なプリミティブであり、サーバーがクライアントに実行可能な機能を公開することを可能にします。ツールを通じて、LLMは外部システムと対話し、計算を実行し、現実世界でのアクションを実行できます。
+
+<Note>
+  ツールは**モデル制御**を意図して設計されており、AIモデルが自動的にそれらを呼び出すことができるようにサーバーからクライアントに公開されます（人間が承認を与えるループ内で）。
+</Note>
+
+## 概要
+
+MCPのツールは、サーバーがクライアントによって呼び出され、LLMがアクションを実行するために使用できる実行可能な関数を公開することを可能にします。ツールの主な側面には以下が含まれます：
+
+- **発見**：クライアントは`tools/list`エンドポイントを通じて利用可能なツールをリストできます。
+- **呼び出し**：ツールは`tools/call`エンドポイントを使用して呼び出され、サーバーは要求された操作を実行し、結果を返します。
+- **柔軟性**：ツールは単純な計算から複雑なAPIインタラクションまで多岐にわたります。
+
+[リソース](/docs/concepts/resources)と同様に、ツールは一意の名前で識別され、使用をガイドするための説明を含めることができます。ただし、リソースとは異なり、ツールは状態を変更したり外部システムと対話したりする動的な操作を表します。
+
+## ツール定義構造
+
+各ツールは以下の構造で定義されます：
+
+```typescript
+{
+  name: string;          // ツールの一意の識別子
+  description?: string;  // 人間が読める説明
+  inputSchema: {         // ツールのパラメータのJSONスキーマ
+    type: "object",
+    properties: { ... }  // ツール固有のパラメータ
+  }
+}
+```
+
+## ツールの実装
+
+以下は、MCPサーバーで基本的なツールを実装する例です：
+
+<Tabs>
+  <Tab title="TypeScript">
+    ```typescript
+    const server = new Server({
+      name: "example-server",
+      version: "1.0.0"
+    }, {
+      capabilities: {
+        tools: {}
+      }
+    });
+
+    // 利用可能なツールを定義
+    server.setRequestHandler(ListToolsRequestSchema, async () => {
+      return {
+        tools: [{
+          name: "calculate_sum",
+          description: "2つの数を加算する",
+          inputSchema: {
+            type: "object",
+            properties: {
+              a: { type: "number" },
+              b: { type: "number" }
+            },
+            required: ["a", "b"]
+          }
+        }]
+      };
+    });
+
+    // ツールの実行を処理
+    server.setRequestHandler(CallToolRequestSchema, async (request) => {
+      if (request.params.name === "calculate_sum") {
+        const { a, b } = request.params.arguments;
+        return {
+          content: [
+            {
+              type: "text",
+              text: String(a + b)
+            }
+          ]
+        };
+      }
+      throw new Error("ツールが見つかりません");
+    });
+    ```
+  </Tab>
+  <Tab title="Python">
+    ```python
+    app = Server("example-server")
+
+    @app.list_tools()
+    async def list_tools() -> list[types.Tool]:
+        return [
+            types.Tool(
+                name="calculate_sum",
+                description="2つの数を加算する",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "a": {"type": "number"},
+                        "b": {"type": "number"}
+                    },
+                    "required": ["a", "b"]
+                }
+            )
+        ]
+
+    @app.call_tool()
+    async def call_tool(
+        name: str,
+        arguments: dict
+    ) -> list[types.TextContent | types.ImageContent | types.EmbeddedResource]:
+        if name == "calculate_sum":
+            a = arguments["a"]
+            b = arguments["b"]
+            result = a + b
+            return [types.TextContent(type="text", text=str(result))]
+        raise ValueError(f"ツールが見つかりません: {name}")
+    ```
+  </Tab>
+</Tabs>
+
+## ツールパターンの例
+
+サーバーが提供できるツールのタイプの例をいくつか示します：
+
+### システム操作
+
+ローカルシステムと対話するツール：
+
+```typescript
+{
+  name: "execute_command",
+  description: "シェルコマンドを実行する",
+  inputSchema: {
+    type: "object",
+    properties: {
+      command: { type: "string" },
+      args: { type: "array", items: { type: "string" } }
+    }
+  }
+}
+```
+
+### API統合
+
+外部APIをラップするツール：
+
+```typescript
+{
+  name: "github_create_issue",
+  description: "GitHubのイシューを作成する",
+  inputSchema: {
+    type: "object",
+    properties: {
+      title: { type: "string" },
+      body: { type: "string" },
+      labels: { type: "array", items: { type: "string" } }
+    }
+  }
+}
+```
+
+### データ処理
+
+データを変換または分析するツール：
+
+```typescript
+{
+  name: "analyze_csv",
+  description: "CSVファイルを分析する",
+  inputSchema: {
+    type: "object",
+    properties: {
+      filepath: { type: "string" },
+      operations: {
+        type: "array",
+        items: {
+          enum: ["sum", "average", "count"]
+        }
+      }
+    }
+  }
+}
+```
+
+## ベストプラクティス
+
+ツールを実装する際には：
+
+1. 明確で説明的な名前と説明を提供する
+2. パラメータの詳細なJSONスキーマ定義を使用する
+3. モデルがそれらをどのように使用すべきかを示す例をツールの説明に含める
+4. 適切なエラーハンドリングとバリデーションを実装する
+5. 長時間の操作には進捗報告を使用する
+6. ツールの操作を集中し、アトミックに保つ
+7. 期待される戻り値の構造を文書化する
+8. 適切なタイムアウトを実装する
+9. リソース集約的な操作にはレート制限を考慮する
+10. デバッグと監視のためにツールの使用をログに記録する
+
+## セキュリティ考慮事項
+
+ツールを公開する際には：
+
+### 入力バリデーション
+
+- すべてのパラメータをスキーマに対して検証する
+- ファイルパスとシステムコマンドをサニタイズする
+- URLと外部識別子を検証する
+- パラメータのサイズと範囲を確認する
+- コマンドインジェクションを防ぐ
+
+### アクセス制御
+
+- 必要に応じて認証を実装する
+- 適切な認可チェックを使用する
+- ツールの使用を監査する
+- リクエストをレート制限する
+- 悪用を監視する
+
+### エラーハンドリング
+
+- クライアントに内部エラーを公開しない
+- セキュリティ関連のエラーをログに記録する
+- タイムアウトを適切に処理する
+- エラー後にリソースをクリーンアップする
+- 戻り値を検証する
+
+## ツールの発見と更新
+
+MCPは動的なツールの発見をサポートしています：
+
+1. クライアントはいつでも利用可能なツールをリストできます
+2. サーバーは`notifications/tools/list_changed`を使用してツールが変更されたときにクライアントに通知できます
+3. ツールはランタイム中に追加または削除できます
+4. ツール定義は更新できます（ただし、慎重に行う必要があります）
+
+## エラーハンドリング
+
+ツールのエラーは、MCPプロトコルレベルのエラーとしてではなく、結果オブジェクト内で報告されるべきです。これにより、LLMがエラーを見て、潜在的に処理できるようになります。ツールがエラーに遭遇した場合：
+
+1. 結果内で`isError`を`true`に設定する
+2. エラーの詳細を`content`配列に含める
+
+以下はツールの適切なエラーハンドリングの例です：
+
+<Tabs>
+  <Tab title="TypeScript">
+    ```typescript
+    // エラーハンドリングの例
+    ```
+  </Tab>
+  <Tab title="Python">
+    ```python
+    # エラーハンドリングの例
+    ```
+  </Tab>
+</Tabs> 

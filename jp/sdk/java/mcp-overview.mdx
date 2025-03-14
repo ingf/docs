@@ -1,0 +1,167 @@
+ ---
+title: 概要
+description: Model Context Protocol (MCP) Java SDKの紹介
+---
+
+Java SDK for the [Model Context Protocol](https://modelcontextprotocol.org/docs/concepts/architecture)
+はAIモデルとツール間の標準化された統合を可能にします。
+
+## 特徴
+
+- MCP ClientとMCP Server実装が以下をサポート：
+  - プロトコルの[バージョン互換性交渉](https://spec.modelcontextprotocol.io/specification/2024-11-05/basic/lifecycle/#initialization)
+  - [ツール](https://spec.modelcontextprotocol.io/specification/2024-11-05/server/tools/)の発見、実行、リスト変更通知
+  - URIテンプレートを持つ[リソース](https://spec.modelcontextprotocol.io/specification/2024-11-05/server/resources/)管理
+  - [ルート](https://spec.modelcontextprotocol.io/specification/2024-11-05/client/roots/)リスト管理と通知
+  - [プロンプト](https://spec.modelcontextprotocol.io/specification/2024-11-05/server/prompts/)の処理と管理
+  - AIモデル連携のための[サンプリング](https://spec.modelcontextprotocol.io/specification/2024-11-05/client/sampling/)サポート
+- 複数のトランスポート実装：
+  - デフォルトトランスポート：
+    - プロセスベースの通信のためのStdioベーストランスポート
+    - HTTP SSEクライアント側ストリーミング用のJava HttpClientベースのSSEクライアントトランスポート
+    - HTTP SSEサーバーストリーミング用のServletベースのSSEサーバートランスポート
+  - Springベースのトランスポート：
+    - リアクティブHTTPストリーミングのためのWebFlux SSEクライアントとサーバートランスポート
+    - サーブレットベースのHTTPストリーミングのためのWebMVC SSEトランスポート
+- 同期および非同期プログラミングパラダイムをサポート
+
+## アーキテクチャ
+
+SDKは明確な関心事の分離を持つ階層化アーキテクチャに従っています：
+
+![MCP Stack Architecture](/images/java/mcp-stack.svg)
+
+- **クライアント/サーバー層（McpClient/McpServer）**：両方ともMcpSessionを使用して同期/非同期操作を行い、
+McpClientはクライアント側のプロトコル操作を処理し、McpServerはサーバー側のプロトコル操作を管理します。
+- **セッション層（McpSession）**：DefaultMcpSession実装を使用して通信パターンと状態を管理します。
+- **トランスポート層（McpTransport）**：以下を通じてJSON-RPCメッセージのシリアライズ/デシリアライズを処理します：
+  - コアモジュールのStdioTransport（stdin/stdout）
+  - 専用トランスポートモジュールのHTTP SSEトランスポート（Java HttpClient、Spring WebFlux、Spring WebMVC）
+
+
+MCP Clientは、Model Context Protocol（MCP）アーキテクチャの重要なコンポーネントで、MCPサーバーとの接続の確立と管理を担当します。
+これはプロトコルのクライアント側を実装します。
+
+![Java MCP Client Architecture](/images/java/java-mcp-client-architecture.jpg)
+
+MCP Serverは、Model Context Protocol（MCP）アーキテクチャの基盤となるコンポーネントで、クライアントにツール、リソース、機能を提供します。
+これはプロトコルのサーバー側を実装します。
+
+![Java MCP Server Architecture](/images/java/java-mcp-server-architecture.jpg)
+
+主な相互作用：
+
+- **クライアント/サーバーの初期化**：トランスポートのセットアップ、プロトコル互換性チェック、機能交渉、実装の詳細交換。
+- **メッセージフロー**：検証、型安全なレスポンス処理、エラー処理を伴うJSON-RPCメッセージ処理。
+- **リソース管理**：リソースの発見、URIテンプレートベースのアクセス、サブスクリプションシステム、コンテンツ取得。
+
+## 依存関係
+
+以下のMaven依存関係をプロジェクトに追加してください：
+
+<Tabs>
+  <Tab title="Maven">
+コアMCP機能：
+
+```xml
+<dependency>
+    <groupId>io.modelcontextprotocol.sdk</groupId>
+    <artifactId>mcp</artifactId>
+</dependency>
+```
+
+HTTP SSEトランスポート実装については、以下の依存関係のいずれかを追加してください：
+
+```xml
+<!-- Spring WebFluxベースのSSEクライアントとサーバートランスポート -->
+<dependency>
+    <groupId>io.modelcontextprotocol.sdk</groupId>
+    <artifactId>mcp-spring-webflux</artifactId>
+</dependency>
+
+<!-- Spring WebMVCベースのSSEサーバートランスポート -->
+<dependency>
+    <groupId>io.modelcontextprotocol.sdk</groupId>
+    <artifactId>mcp-spring-webmvc</artifactId>
+</dependency>
+```
+  </Tab>
+    <Tab title="Gradle">
+    コアMCP機能：
+
+  ```groovy
+  dependencies {
+    implementation platform("io.modelcontextprotocol.sdk:mcp")
+    //...
+  }
+  ```
+
+    HTTP SSEトランスポート実装については、以下の依存関係のいずれかを追加してください：
+
+    ```groovy
+    // Spring WebFluxベースのSSEクライアントとサーバートランスポート
+    dependencies {
+      implementation platform("io.modelcontextprotocol.sdk:mcp-spring-webflux")
+    }
+
+    // Spring WebMVCベースのSSEサーバートランスポート
+    dependencies {
+      implementation platform("io.modelcontextprotocol.sdk:mcp-spring-webmvc")
+    }
+    ```
+  </Tab>
+</Tabs>
+
+### 部品表（BOM）
+
+部品表（BOM）は、特定のリリースで使用されるすべての依存関係の推奨バージョンを宣言します。
+アプリケーションのビルドスクリプトからBOMを使用することで、依存関係のバージョンを自分で指定し維持する必要がなくなります。
+代わりに、使用しているBOMのバージョンが使用される依存関係のバージョンを決定します。
+また、オーバーライドしない限り、デフォルトでサポートされテスト済みの依存関係バージョンを使用していることを保証します。
+
+BOMをプロジェクトに追加してください：
+
+<Tabs>
+  <Tab title="Maven">
+```xml
+<dependencyManagement>
+    <dependencies>
+        <dependency>
+            <groupId>io.modelcontextprotocol.sdk</groupId>
+            <artifactId>mcp-bom</artifactId>
+            <version>0.7.0</version>
+            <type>pom</type>
+            <scope>import</scope>
+        </dependency>
+    </dependencies>
+</dependencyManagement>
+```
+  </Tab>
+
+  <Tab title="Gradle">
+```groovy
+dependencies {
+  implementation platform("io.modelcontextprotocol.sdk:mcp-bom:0.7.0")
+  //...
+}
+```
+
+Gradleユーザーは、Gradle（5.0+）がMaven BOMを使用して依存関係制約を宣言するネイティブサポートを活用することで、Spring AI MCP BOMを使用することもできます。
+これは、Gradleビルドスクリプトの依存関係セクションに「platform」依存関係ハンドラーメソッドを追加することで実装されます。
+上記のスニペットに示されているように、これに続いて使用したいspring-aiモジュール（例：spring-ai-openai）の1つ以上のスターター依存関係のバージョンのない宣言を続けることができます。
+  </Tab>
+</Tabs>
+
+バージョン番号を使用したいBOMのバージョンに置き換えてください。
+
+### 利用可能な依存関係
+
+以下の依存関係が利用可能であり、BOMによって管理されています：
+
+- コア依存関係 
+  - `io.modelcontextprotocol.sdk:mcp` - Model Context Protocol実装の基本機能とAPIを提供するコアMCPライブラリ。
+- トランスポート依存関係
+  - `io.modelcontextprotocol.sdk:mcp-spring-webflux` - リアクティブアプリケーション用のWebFluxベースのServer-Sent Events（SSE）トランスポート実装。
+  - `io.modelcontextprotocol.sdk:mcp-spring-webmvc` - サーブレットベースのアプリケーション用のWebMVCベースのServer-Sent Events（SSE）トランスポート実装。
+- テスト依存関係
+  - `io.modelcontextprotocol.sdk:mcp-test` - MCPベースのアプリケーションのテストユーティリティとサポート。

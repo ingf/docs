@@ -1,0 +1,322 @@
+ ---
+title: MCP クライアント
+description: Model Context Protocol (MCP) クライアントを使用してMCPサーバーと対話する方法を学ぶ
+---
+
+# Model Context Protocol クライアント
+
+MCP クライアントは、Model Context Protocol (MCP) アーキテクチャにおける重要なコンポーネントであり、MCPサーバーとの接続の確立と管理を担当します。これはプロトコルのクライアント側を実装し、以下を処理します：
+
+- サーバーとの互換性を確保するためのプロトコルバージョン交渉
+- 利用可能な機能を決定するための機能交渉
+- メッセージ転送とJSON-RPC通信
+- ツールの発見と実行
+- リソースへのアクセスと管理
+- プロンプトシステムとの対話
+- ルーツ管理やサンプリングサポートなどのオプション機能
+
+クライアントは、さまざまなアプリケーションコンテキストでの柔軟性のために、同期APIと非同期APIの両方を提供します。
+
+<Tabs>
+  <Tab title="Sync API">
+```java
+// Create a sync client with custom configuration
+McpSyncClient client = McpClient.sync(transport)
+    .requestTimeout(Duration.ofSeconds(10))
+    .capabilities(ClientCapabilities.builder()
+        .roots(true)      // Enable roots capability
+        .sampling()       // Enable sampling capability
+        .build())
+    .sampling(request -> new CreateMessageResult(response))
+    .build();
+
+// Initialize connection
+client.initialize();
+
+// List available tools
+ListToolsResult tools = client.listTools();
+
+// Call a tool
+CallToolResult result = client.callTool(
+    new CallToolRequest("calculator", 
+        Map.of("operation", "add", "a", 2, "b", 3))
+);
+
+// List and read resources
+ListResourcesResult resources = client.listResources();
+ReadResourceResult resource = client.readResource(
+    new ReadResourceRequest("resource://uri")
+);
+
+// List and use prompts
+ListPromptsResult prompts = client.listPrompts();
+GetPromptResult prompt = client.getPrompt(
+    new GetPromptRequest("greeting", Map.of("name", "Spring"))
+);
+
+// Add/remove roots
+client.addRoot(new Root("file:///path", "description"));
+client.removeRoot("file:///path");
+
+// Close client
+client.closeGracefully();
+```
+  </Tab>
+
+  <Tab title="Async API">
+```java
+// Create an async client with custom configuration
+McpAsyncClient client = McpClient.async(transport)
+    .requestTimeout(Duration.ofSeconds(10))
+    .capabilities(ClientCapabilities.builder()
+        .roots(true)      // Enable roots capability
+        .sampling()       // Enable sampling capability
+        .build())
+    .sampling(request -> Mono.just(new CreateMessageResult(response)))
+    .toolsChangeConsumer(tools -> Mono.fromRunnable(() -> {
+        logger.info("Tools updated: {}", tools);
+    }))
+    .resourcesChangeConsumer(resources -> Mono.fromRunnable(() -> {
+        logger.info("Resources updated: {}", resources);
+    }))
+    .promptsChangeConsumer(prompts -> Mono.fromRunnable(() -> {
+        logger.info("Prompts updated: {}", prompts);
+    }))
+    .build();
+
+// Initialize connection and use features
+client.initialize()
+    .flatMap(initResult -> client.listTools())
+    .flatMap(tools -> {
+        return client.callTool(new CallToolRequest(
+            "calculator", 
+            Map.of("operation", "add", "a", 2, "b", 3)
+        ));
+    })
+    .flatMap(result -> {
+        return client.listResources()
+            .flatMap(resources -> 
+                client.readResource(new ReadResourceRequest("resource://uri"))
+            );
+    })
+    .flatMap(resource -> {
+        return client.listPrompts()
+            .flatMap(prompts ->
+                client.getPrompt(new GetPromptRequest(
+                    "greeting", 
+                    Map.of("name", "Spring")
+                ))
+            );
+    })
+    .flatMap(prompt -> {
+        return client.addRoot(new Root("file:///path", "description"))
+            .then(client.removeRoot("file:///path"));            
+    })
+    .doFinally(signalType -> {
+        client.closeGracefully().subscribe();
+    })
+    .subscribe();
+```
+  </Tab>
+</Tabs>
+
+## クライアントトランスポート
+
+トランスポート層はMCPクライアントとサーバー間の通信を処理し、さまざまなユースケースに対応するために異なる実装を提供します。クライアントトランスポートはメッセージのシリアライズ、接続の確立、プロトコル固有の通信パターンを管理します。
+
+<Tabs>
+    <Tab title="STDIO">
+        プロセス内ベースの通信用トランスポートを作成します
+        ```java
+        ServerParameters params = ServerParameters.builder("npx")
+            .args("-y", "@modelcontextprotocol/server-everything", "dir")
+            .build();
+        McpTransport transport = new StdioClientTransport(params);
+        ```
+    </Tab>
+    <Tab title="SSE (HttpClient)">
+        フレームワークに依存しない（純粋なJava API）SSEクライアントトランスポートを作成します。コアmcpモジュールに含まれています。
+        ```java
+        McpTransport transport = new HttpClientSseClientTransport("http://your-mcp-server");
+        ```
+    </Tab>
+    <Tab title="SSE (WebFlux)">
+        WebFluxベースのSSEクライアントトランスポートを作成します。mcp-webflux-sse-transport依存関係が必要です。
+        ```java
+        WebClient.Builder webClientBuilder = WebClient.builder()
+            .baseUrl("http://your-mcp-server");
+        McpTransport transport = new WebFluxSseClientTransport(webClientBuilder);
+        ```
+    </Tab>
+</Tabs>
+
+## クライアント機能
+
+クライアントはさまざまな機能で設定できます：
+
+```java
+var capabilities = ClientCapabilities.builder()
+    .roots(true)      // Enable filesystem roots support with list changes notifications
+    .sampling()       // Enable LLM sampling support
+    .build();
+```
+
+### ルーツサポート
+
+ルーツは、サーバーがファイルシステム内で操作できる境界を定義します：
+
+```java
+// Add a root dynamically
+client.addRoot(new Root("file:///path", "description"));
+
+// Remove a root
+client.removeRoot("file:///path");
+
+// Notify server of roots changes
+client.rootsListChangedNotification();
+```
+
+ルーツ機能により、サーバーは以下のことが可能になります：
+
+- アクセス可能なファイルシステムルーツのリストを要求する
+- ルーツリストが変更されたときに通知を受け取る
+- アクセス権のあるディレクトリとファイルを理解する
+
+
+### サンプリングサポート
+
+サンプリングにより、サーバーはクライアントを通じてLLMとの対話（「補完」や「生成」）を要求することができます：
+
+```java
+// Configure sampling handler
+Function<CreateMessageRequest, CreateMessageResult> samplingHandler = request -> {
+    // Sampling implementation that interfaces with LLM
+    return new CreateMessageResult(response);
+};
+
+// Create client with sampling support
+var client = McpClient.sync(transport)
+    .capabilities(ClientCapabilities.builder()
+        .sampling()
+        .build())
+    .sampling(samplingHandler)
+    .build();
+```
+
+この機能により以下が可能になります：
+- サーバーがAPIキーを必要とせずにAI機能を活用すること
+- クライアントがモデルへのアクセスと許可を制御し続けること
+- テキストベースと画像ベースの両方の対話をサポートすること
+- プロンプトにMCPサーバーコンテキストをオプションで含めること
+
+
+## MCPクライアントの使用
+
+### ツール実行
+
+ツールは、クライアントが発見して実行できるサーバー側の関数です。MCPクライアントは、利用可能なツールをリストアップし、特定のパラメータで実行するためのメソッドを提供します。各ツールには一意の名前があり、パラメータのマップを受け入れます。
+
+<Tabs>
+  <Tab title="Sync API">
+```java
+// List available tools and their names
+var tools = client.listTools();
+tools.forEach(tool -> System.out.println(tool.getName()));
+
+// Execute a tool with parameters
+var result = client.callTool("calculator", Map.of(
+    "operation", "add",
+    "a", 1,
+    "b", 2
+));
+```
+  </Tab>
+
+  <Tab title="Async API">
+```java
+// List available tools asynchronously
+client.listTools()
+    .doOnNext(tools -> tools.forEach(tool -> 
+        System.out.println(tool.getName())))
+    .subscribe();
+
+// Execute a tool asynchronously
+client.callTool("calculator", Map.of(
+        "operation", "add",
+        "a", 1,
+        "b", 2
+    ))
+    .subscribe();
+```
+  </Tab>
+</Tabs>
+
+### リソースアクセス
+
+リソースは、クライアントがURIテンプレートを使用してアクセスできるサーバー側のデータソースを表します。MCPクライアントは、利用可能なリソースを発見し、標準化されたインターフェースを通じてそのコンテンツを取得するためのメソッドを提供します。
+
+<Tabs>
+  <Tab title="Sync API">
+```java
+// List available resources and their names
+var resources = client.listResources();
+resources.forEach(resource -> System.out.println(resource.getName()));
+
+// Retrieve resource content using a URI template
+var content = client.getResource("file", Map.of(
+    "path", "/path/to/file.txt"
+));
+```
+  </Tab>
+
+  <Tab title="Async API">
+```java
+// List available resources asynchronously
+client.listResources()
+    .doOnNext(resources -> resources.forEach(resource -> 
+        System.out.println(resource.getName())))
+    .subscribe();
+
+// Retrieve resource content asynchronously
+client.getResource("file", Map.of(
+        "path", "/path/to/file.txt"
+    ))
+    .subscribe();
+```
+  </Tab>
+</Tabs>
+
+### プロンプトシステム
+
+プロンプトシステムは、サーバー側のプロンプトテンプレートとの対話を可能にします。これらのテンプレートを発見し、カスタムパラメータで実行することができ、事前定義されたパターンに基づいて動的なテキスト生成が可能になります。
+
+<Tabs>
+  <Tab title="Sync API">
+```java
+// List available prompt templates
+var prompts = client.listPrompts();
+prompts.forEach(prompt -> System.out.println(prompt.getName()));
+
+// Execute a prompt template with parameters
+var response = client.executePrompt("echo", Map.of(
+    "text", "Hello, World!"
+));
+```
+  </Tab>
+
+  <Tab title="Async API">
+```java
+// List available prompt templates asynchronously
+client.listPrompts()
+    .doOnNext(prompts -> prompts.forEach(prompt -> 
+        System.out.println(prompt.getName())))
+    .subscribe();
+
+// Execute a prompt template asynchronously
+client.executePrompt("echo", Map.of(
+        "text", "Hello, World!"
+    ))
+    .subscribe();
+```
+  </Tab>
+</Tabs>

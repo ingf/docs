@@ -1,0 +1,313 @@
+---
+title: "Tools"
+description: "Enable LLMs to perform actions through your server"
+---
+
+Tools 是模型上下文協議 (MCP) 中一個強大的基本要素，使伺服器能夠向客戶端公開可執行的功能。透過 Tools，LLMs 可以與外部系統互動、執行運算，並在現實世界中採取行動。
+
+<Note>
+  Tools 的設計目標是 **模型控制**，意即 Tools 從伺服器公開給客戶端，目的是讓 AI 模型能夠自動調用它們（在迴圈中有人工參與以授予批准）。
+</Note>
+
+## 概述
+
+MCP 中的 Tools 允許伺服器公開可執行的函數，這些函數可以被客戶端調用，並被 LLMs 用於執行操作。Tools 的主要方面包括：
+
+- **探索 (Discovery)**：客戶端可以透過 `tools/list` 端點列出可用的 Tools
+- **調用 (Invocation)**：Tools 使用 `tools/call` 端點調用，伺服器在此執行請求的操作並返回結果
+- **彈性 (Flexibility)**：Tools 的範圍可以從簡單的計算到複雜的 API 互動
+
+與 [resources](/docs/concepts/resources) 類似，Tools 由唯一的名稱識別，並且可以包含描述以指導其使用。然而，與 resources 不同，Tools 代表可以修改狀態或與外部系統互動的動態操作。
+
+## Tool 定義結構
+
+每個 Tool 都使用以下結構定義：
+
+```typescript
+{
+  name: string;          // Unique identifier for the tool
+  description?: string;  // Human-readable description
+  inputSchema: {         // JSON Schema for the tool's parameters
+    type: "object",
+    properties: { ... }  // Tool-specific parameters
+  }
+}
+```
+
+## 實作 Tools
+
+以下是在 MCP 伺服器中實作基本 Tool 的範例：
+
+<Tabs>
+  <Tab title="TypeScript">
+    ```typescript
+    const server = new Server({
+      name: "example-server",
+      version: "1.0.0"
+    }, {
+      capabilities: {
+        tools: {}
+      }
+    });
+
+    // Define available tools
+    server.setRequestHandler(ListToolsRequestSchema, async () => {
+      return {
+        tools: [{
+          name: "calculate_sum",
+          description: "Add two numbers together",
+          inputSchema: {
+            type: "object",
+            properties: {
+              a: { type: "number" },
+              b: { type: "number" }
+            },
+            required: ["a", "b"]
+          }
+        }]
+      };
+    });
+
+    // Handle tool execution
+    server.setRequestHandler(CallToolRequestSchema, async (request) => {
+      if (request.params.name === "calculate_sum") {
+        const { a, b } = request.params.arguments;
+        return {
+          content: [
+            {
+              type: "text",
+              text: String(a + b)
+            }
+          ]
+        };
+      }
+      throw new Error("Tool not found");
+    });
+    ```
+  </Tab>
+  <Tab title="Python">
+    ```python
+    app = Server("example-server")
+
+    @app.list_tools()
+    async def list_tools() -> list[types.Tool]:
+        return [
+            types.Tool(
+                name="calculate_sum",
+                description="Add two numbers together",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "a": {"type": "number"},
+                        "b": {"type": "number"}
+                    },
+                    "required": ["a", "b"]
+                }
+            )
+        ]
+
+    @app.call_tool()
+    async def call_tool(
+        name: str,
+        arguments: dict
+    ) -> list[types.TextContent | types.ImageContent | types.EmbeddedResource]:
+        if name == "calculate_sum":
+            a = arguments["a"]
+            b = arguments["b"]
+            result = a + b
+            return [types.TextContent(type="text", text=str(result))]
+        raise ValueError(f"Tool not found: {name}")
+    ```
+  </Tab>
+</Tabs>
+
+## Tool 範例模式
+
+以下是一些伺服器可以提供的 Tool 類型範例：
+
+### 系統操作 (System operations)
+
+與本地系統互動的 Tools：
+
+```typescript
+{
+  name: "execute_command",
+  description: "Run a shell command",
+  inputSchema: {
+    type: "object",
+    properties: {
+      command: { type: "string" },
+      args: { type: "array", items: { type: "string" } }
+    }
+  }
+}
+```
+
+### API 整合 (API integrations)
+
+封裝外部 API 的 Tools：
+
+```typescript
+{
+  name: "github_create_issue",
+  description: "Create a GitHub issue",
+  inputSchema: {
+    type: "object",
+    properties: {
+      title: { type: "string" },
+      body: { type: "string" },
+      labels: { type: "array", items: { type: "string" } }
+    }
+  }
+}
+```
+
+### 資料處理 (Data processing)
+
+轉換或分析資料的 Tools：
+
+```typescript
+{
+  name: "analyze_csv",
+  description: "Analyze a CSV file",
+  inputSchema: {
+    type: "object",
+    properties: {
+      filepath: { type: "string" },
+      operations: {
+        type: "array",
+        items: {
+          enum: ["sum", "average", "count"]
+        }
+      }
+    }
+  }
+}
+```
+
+## 最佳實踐 (Best practices)
+
+實作 Tools 時：
+
+1. 提供清晰、描述性的名稱和描述
+2. 為參數使用詳細的 JSON Schema 定義
+3. 在 Tool 描述中包含範例，以示範模型應如何使用它們
+4. 實作適當的錯誤處理和驗證
+5. 對於長時間運行的操作使用進度報告
+6. 保持 Tool 操作的重點和原子性
+7. 記錄預期的回傳值結構
+8. 實作適當的逾時
+9. 考慮對資源密集型操作進行速率限制
+10. 記錄 Tool 使用情況以進行除錯和監控
+
+## 安全性考量 (Security considerations)
+
+公開 Tools 時：
+
+### 輸入驗證 (Input validation)
+
+- 根據 schema 驗證所有參數
+- 清理檔案路徑和系統命令
+- 驗證 URL 和外部識別符
+- 檢查參數大小和範圍
+- 防止命令注入
+
+### 存取控制 (Access control)
+
+- 在需要時實作身份驗證
+- 使用適當的授權檢查
+- 稽核 Tool 使用情況
+- 速率限制請求
+- 監控濫用情況
+
+### 錯誤處理 (Error handling)
+
+- 不要向客戶端公開內部錯誤
+- 記錄與安全性相關的錯誤
+- 適當處理逾時
+- 錯誤後清理資源
+- 驗證回傳值
+
+## Tool 探索與更新 (Tool discovery and updates)
+
+MCP 支援動態 Tool 探索：
+
+1. 客戶端可以隨時列出可用的 Tools
+2. 當 Tools 變更時，伺服器可以使用 `notifications/tools/list_changed` 通知客戶端
+3. Tools 可以在運行時新增或移除
+4. Tool 定義可以更新（儘管應謹慎執行）
+
+## 錯誤處理 (Error handling)
+
+Tool 錯誤應在結果物件中報告，而不是作為 MCP 協議層級的錯誤。這允許 LLM 查看並可能處理錯誤。當 Tool 遇到錯誤時：
+
+1. 在結果中將 `isError` 設定為 `true`
+2. 在 `content` 陣列中包含錯誤詳細資訊
+
+以下是 Tool 正確錯誤處理的範例：
+
+<Tabs>
+  <Tab title="TypeScript">
+    ```typescript
+    try {
+      // Tool operation
+      const result = performOperation();
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Operation successful: ${result}`
+          }
+        ]
+      };
+    } catch (error) {
+      return {
+        isError: true,
+        content: [
+          {
+            type: "text",
+            text: `Error: ${error.message}`
+          }
+        ]
+      };
+    }
+    ```
+  </Tab>
+  <Tab title="Python">
+    ```python
+    try:
+        # Tool operation
+        result = perform_operation()
+        return types.CallToolResult(
+            content=[
+                types.TextContent(
+                    type="text",
+                    text=f"Operation successful: {result}"
+                )
+            ]
+        )
+    except Exception as error:
+        return types.CallToolResult(
+            isError=True,
+            content=[
+                types.TextContent(
+                    type="text",
+                    text=f"Error: {str(error)}"
+                )
+            ]
+        )
+    ```
+  </Tab>
+</Tabs>
+
+這種方法允許 LLM 看到發生了錯誤，並可能採取糾正措施或請求人工介入。
+
+## 測試 Tools (Testing tools)
+
+MCP Tools 的全面測試策略應涵蓋：
+
+- **功能測試 (Functional testing)**：驗證 Tools 在有效輸入下正確執行，並適當處理無效輸入
+- **整合測試 (Integration testing)**：使用真實和模擬的依賴項測試 Tool 與外部系統的互動
+- **安全性測試 (Security testing)**：驗證身份驗證、授權、輸入清理和速率限制
+- **效能測試 (Performance testing)**：檢查負載下的行為、逾時處理和資源清理
+- **錯誤處理 (Error handling)**：確保 Tools 透過 MCP 協議正確報告錯誤並清理資源

@@ -1,0 +1,250 @@
+---
+title: "リソース"
+description: "サーバーからLLMにデータとコンテンツを公開する"
+---
+
+リソースは、Model Context Protocol (MCP) におけるコアプリミティブであり、サーバーがクライアントによって読み取られ、LLMとの対話のコンテキストとして使用されるデータとコンテンツを公開することを可能にします。
+
+<Note>
+  リソースは**アプリケーション制御**を意図して設計されており、クライアントアプリケーションがそれらをどのように、いつ使用するかを決定できます。
+  異なるMCPクライアントはリソースを異なる方法で処理する場合があります。例えば：
+  - Claude Desktopは現在、ユーザーがリソースを使用する前に明示的に選択する必要があります。
+  - 他のクライアントはヒューリスティックに基づいてリソースを自動的に選択するかもしれません。
+  - 一部の実装では、AIモデル自体がどのリソースを使用するかを決定することを許可する場合もあります。
+
+  サーバーの作成者は、リソースサポートを実装する際に、これらのいずれかのインタラクションパターンに対応できるように準備する必要があります。モデルにデータを自動的に公開するために、サーバーの作成者は[ツール](./tools)のような**モデル制御**プリミティブを使用する必要があります。
+</Note>
+
+## 概要
+
+リソースは、MCPサーバーがクライアントに利用可能にしたい任意の種類のデータを表します。これには以下が含まれます：
+
+- ファイルの内容
+- データベースのレコード
+- APIレスポンス
+- ライブシステムデータ
+- スクリーンショットと画像
+- ログファイル
+- その他
+
+各リソースは一意のURIで識別され、テキストまたはバイナリデータを含むことができます。
+
+## リソースURI
+
+リソースは次の形式のURIを使用して識別されます：
+
+```
+[protocol]://[host]/[path]
+```
+
+例えば：
+- `file:///home/user/documents/report.pdf`
+- `postgres://database/customers/schema`
+- `screen://localhost/display1`
+
+プロトコルとパスの構造は、MCPサーバーの実装によって定義されます。サーバーは独自のカスタムURIスキームを定義できます。
+
+## リソースタイプ
+
+リソースは2種類のコンテンツを含むことができます：
+
+### テキストリソース
+
+テキストリソースはUTF-8エンコードされたテキストデータを含みます。これらは以下に適しています：
+- ソースコード
+- 設定ファイル
+- ログファイル
+- JSON/XMLデータ
+- プレーンテキスト
+
+### バイナリリソース
+
+バイナリリソースはbase64でエンコードされた生のバイナリデータを含みます。これらは以下に適しています：
+- 画像
+- PDF
+- オーディオファイル
+- ビデオファイル
+- その他の非テキスト形式
+
+## リソースの発見
+
+クライアントは2つの主要な方法で利用可能なリソースを発見できます：
+
+### 直接リソース
+
+サーバーは`resources/list`エンドポイントを通じて具体的なリソースのリストを公開します。各リソースには以下が含まれます：
+
+```typescript
+{
+  uri: string;           // リソースの一意の識別子
+  name: string;          // 人間が読める名前
+  description?: string;  // オプションの説明
+  mimeType?: string;     // オプションのMIMEタイプ
+}
+```
+
+### リソーステンプレート
+
+動的リソースの場合、サーバーはクライアントが有効なリソースURIを構築するために使用できる[URIテンプレート](https://datatracker.ietf.org/doc/html/rfc6570)を公開できます：
+
+```typescript
+{
+  uriTemplate: string;   // RFC 6570に従ったURIテンプレート
+  name: string;          // このタイプの人間が読める名前
+  description?: string;  // オプションの説明
+  mimeType?: string;     // すべての一致するリソースのオプションのMIMEタイプ
+}
+```
+
+## リソースの読み取り
+
+リソースを読み取るには、クライアントがリソースURIを指定して`resources/read`リクエストを行います。
+
+サーバーはリソースの内容のリストで応答します：
+
+```typescript
+{
+  contents: [
+    {
+      uri: string;        // リソースのURI
+      mimeType?: string;  // オプションのMIMEタイプ
+
+      // 以下のいずれか：
+      text?: string;      // テキストリソースの場合
+      blob?: string;      // バイナリリソースの場合（base64エンコード）
+    }
+  ]
+}
+```
+
+<Tip>
+  サーバーは1つの`resources/read`リクエストに対して複数のリソースを返すことができます。これは、ディレクトリが読み取られたときにその中のファイルのリストを返すために使用される可能性があります。
+</Tip>
+
+## リソースの更新
+
+MCPは、リソースのリアルタイム更新を2つのメカニズムでサポートしています：
+
+### リストの変更
+
+サーバーは`notifications/resources/list_changed`通知を通じて、利用可能なリソースのリストが変更されたときにクライアントに通知できます。
+
+### コンテンツの変更
+
+クライアントは特定のリソースの更新を購読できます：
+
+1. クライアントがリソースURIを指定して`resources/subscribe`を送信
+2. サーバーがリソースが変更されたときに`notifications/resources/updated`を送信
+3. クライアントが最新のコンテンツを取得するために`resources/read`を使用
+4. クライアントが`resources/unsubscribe`で購読を解除
+
+## 実装例
+
+以下は、MCPサーバーでリソースサポートを実装する簡単な例です：
+
+<Tabs>
+  <Tab title="TypeScript">
+    ```typescript
+    const server = new Server({
+      name: "example-server",
+      version: "1.0.0"
+    }, {
+      capabilities: {
+        resources: {}
+      }
+    });
+
+    // 利用可能なリソースをリスト
+    server.setRequestHandler(ListResourcesRequestSchema, async () => {
+      return {
+        resources: [
+          {
+            uri: "file:///logs/app.log",
+            name: "アプリケーションログ",
+            mimeType: "text/plain"
+          }
+        ]
+      };
+    });
+
+    // リソースの内容を読み取る
+    server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
+      const uri = request.params.uri;
+
+      if (uri === "file:///logs/app.log") {
+        const logContents = await readLogFile();
+        return {
+          contents: [
+            {
+              uri,
+              mimeType: "text/plain",
+              text: logContents
+            }
+          ]
+        };
+      }
+
+      throw new Error("リソースが見つかりません");
+    });
+    ```
+  </Tab>
+  <Tab title="Python">
+    ```python
+    app = Server("example-server")
+
+    @app.list_resources()
+    async def list_resources() -> list[types.Resource]:
+        return [
+            types.Resource(
+                uri="file:///logs/app.log",
+                name="アプリケーションログ",
+                mimeType="text/plain"
+            )
+        ]
+
+    @app.read_resource()
+    async def read_resource(uri: AnyUrl) -> str:
+        if str(uri) == "file:///logs/app.log":
+            log_contents = await read_log_file()
+            return log_contents
+
+        raise ValueError("リソースが見つかりません")
+
+    # サーバーを開始
+    async with stdio_server() as streams:
+        await app.run(
+            streams[0],
+            streams[1],
+            app.create_initialization_options()
+        )
+    ```
+  </Tab>
+</Tabs>
+
+## ベストプラクティス
+
+リソースサポートを実装する際には：
+
+1. 明確で説明的なリソース名とURIを使用する
+2. LLMの理解をガイドするために役立つ説明を含める
+3. 知っている場合は適切なMIMEタイプを設定する
+4. 動的コンテンツのためにリソーステンプレートを実装する
+5. 頻繁に変更されるリソースには購読を使用する
+6. 明確なエラーメッセージでエラーを優雅に処理する
+7. 大規模なリソースリストにはページネーションを考慮する
+8. 適切な場合はリソースの内容をキャッシュする
+9. 処理する前にURIを検証する
+10. カスタムURIスキームを文書化する
+
+## セキュリティ考慮事項
+
+リソースを公開する際には：
+
+- すべてのリソースURIを検証する
+- 適切なアクセス制御を実装する
+- ディレクトリトラバーサルを防ぐためにファイルパスをサニタイズする
+- バイナリデータの取り扱いに注意する
+- リソースの読み取りにレート制限を考慮する
+- リソースアクセスを監査する
+- 転送中の機密データを暗号化する
+- MIMEタイプを検証する 

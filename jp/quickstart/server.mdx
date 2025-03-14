@@ -1,0 +1,1170 @@
+---
+title: "サーバー開発者向け"
+description: "Claude for Desktop やその他のクライアントで使用する独自のサーバーの構築を始めましょう。"
+---
+
+このチュートリアルでは、シンプルな MCP 天気サーバーを構築し、ホストである Claude for Desktop に接続します。まず基本的な設定から始め、より複雑なユースケースに進みます。
+
+### 構築するもの
+
+多くの LLM (Claude を含む) は現在、天気予報や悪天候アラートを取得する機能を持っていません。MCP を使用してそれを解決しましょう！
+
+`get-alerts` と `get-forecast` の 2 つのツールを公開するサーバーを構築します。次に、サーバーを MCP ホスト (この場合は Claude for Desktop) に接続します。
+
+<Frame>
+  <img src="/images/weather-alerts.png" />
+</Frame>
+<Frame>
+  <img src="/images/current-weather.png" />
+</Frame>
+
+<Note>
+サーバーは任意のクライアントに接続できます。ここではシンプルにするために Claude for Desktop を選択しましたが、[独自のクライアントの構築](/quickstart/client)に関するガイドや、[その他のクライアントのリストはこちら](/clients)にもガイドがあります。
+</Note>
+
+<Accordion title="Claude.ai ではなく Claude for Desktop を選んだ理由">
+  サーバーはローカルで実行されるため、MCP は現在デスクトップホストのみをサポートしています。リモートホストは現在開発中です。
+</Accordion>
+
+### コア MCP コンセプト
+
+MCP サーバーは、主に 3 種類の機能を提供できます。
+
+1. **リソース**: クライアントが読み取ることができるファイルのようなデータ (API レスポンスやファイルの内容など)
+2. **ツール**: LLM が (ユーザーの承認を得て) 呼び出すことができる関数
+3. **プロンプト**: ユーザーが特定のタスクを達成するのに役立つ事前作成されたテンプレート
+
+このチュートリアルでは、主にツールに焦点を当てます。
+
+<Tabs>
+<Tab title='Python'>
+
+天気サーバーの構築を始めましょう！[ここで構築するものの完全なコードを見つけることができます。](https://github.com/modelcontextprotocol/quickstart-resources/tree/main/weather-server-python)
+
+### 前提知識
+
+このクイックスタートは、以下の知識があることを前提としています。
+- Python
+- Claude のような LLM
+
+### システム要件
+
+- Python 3.10 以上がインストールされていること。
+- Python MCP SDK 1.2.0 以上を使用する必要があります。
+
+### 環境設定
+
+まず、`uv` をインストールし、Python プロジェクトと環境をセットアップしましょう。
+
+<CodeGroup>
+
+```bash MacOS/Linux
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
+```powershell Windows
+powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
+```
+
+</CodeGroup>
+
+`uv` コマンドが認識されるように、その後ターミナルを再起動してください。
+
+次に、プロジェクトを作成してセットアップしましょう。
+
+<CodeGroup>
+```bash MacOS/Linux
+# プロジェクト用の新しいディレクトリを作成
+uv init weather
+cd weather
+
+# 仮想環境を作成してアクティベート
+uv venv
+source .venv/bin/activate
+
+# 依存関係をインストール
+uv add "mcp[cli]" httpx
+
+# サーバーファイルを作成
+touch weather.py
+```
+
+```powershell Windows
+# プロジェクト用の新しいディレクトリを作成
+uv init weather
+cd weather
+
+# 仮想環境を作成してアクティベート
+uv venv
+.venv\Scripts\activate
+
+# 依存関係をインストール
+uv add mcp[cli] httpx
+
+# サーバーファイルを作成
+new-item weather.py
+```
+</CodeGroup>
+
+それでは、サーバーの構築に飛び込みましょう。
+
+## サーバーの構築
+
+### パッケージのインポートとインスタンスのセットアップ
+
+`weather.py` の先頭にこれらを追加します。
+```python
+from typing import Any
+import httpx
+from mcp.server.fastmcp import FastMCP
+
+# FastMCP サーバーを初期化
+mcp = FastMCP("weather")
+
+# 定数
+NWS_API_BASE = "https://api.weather.gov"
+USER_AGENT = "weather-app/1.0"
+```
+
+FastMCP クラスは、Python の型ヒントとドキュメント文字列を使用して、ツール定義を自動的に生成し、MCP ツールの作成と保守を容易にします。
+
+### ヘルパー関数
+
+次に、米国国立気象局 API からデータをクエリしてフォーマットするためのヘルパー関数を追加しましょう。
+
+```python
+async def make_nws_request(url: str) -> dict[str, Any] | None:
+    """適切なエラー処理で NWS API にリクエストを送信します。"""
+    headers = {
+        "User-Agent": USER_AGENT,
+        "Accept": "application/geo+json"
+    }
+    async with httpx.AsyncClient() as client:
+        try:
+            response = await client.get(url, headers=headers, timeout=30.0)
+            response.raise_for_status()
+            return response.json()
+        except Exception:
+            return None
+
+def format_alert(feature: dict) -> str:
+    """アラートフィーチャを読みやすい文字列にフォーマットします。"""
+    props = feature["properties"]
+    return f"""
+イベント: {props.get('event', '不明')}
+地域: {props.get('areaDesc', '不明')}
+重大度: {props.get('severity', '不明')}
+説明: {props.get('description', '説明はありません')}
+指示: {props.get('instruction', '具体的な指示はありません')}
+"""
+```
+
+### ツール実行の実装
+
+ツール実行ハンドラーは、各ツールのロジックを実際に実行する役割を担います。追加しましょう。
+
+```python
+@mcp.tool()
+async def get_alerts(state: str) -> str:
+    """米国の州の天気アラートを取得します。
+
+    Args:
+        state: 米国の州コード (例: CA, NY)
+    """
+    url = f"{NWS_API_BASE}/alerts/active/area/{state}"
+    data = await make_nws_request(url)
+
+    if not data or "features" not in data:
+        return "アラートを取得できませんでした。またはアラートが見つかりませんでした。"
+
+    if not data["features"]:
+        return "この州にはアクティブなアラートはありません。"
+
+    alerts = [format_alert(feature) for feature in data["features"]]
+    return "\n---\n".join(alerts)
+
+@mcp.tool()
+async def get_forecast(latitude: float, longitude: float) -> str:
+    """場所の天気予報を取得します。
+
+    Args:
+        latitude: 場所の緯度
+        longitude: 場所の経度
+    """
+    # まず予報グリッドエンドポイントを取得
+    points_url = f"{NWS_API_BASE}/points/{latitude},{longitude}"
+    points_data = await make_nws_request(points_url)
+
+    if not points_data:
+        return "この場所の予報データを取得できませんでした。"
+
+    # ポイントレスポンスから予報 URL を取得
+    forecast_url = points_data["properties"]["forecast"]
+    forecast_data = await make_nws_request(forecast_url)
+
+    if not forecast_data:
+        return "詳細な予報を取得できませんでした。"
+
+    # 期間を読みやすい予報にフォーマット
+    periods = forecast_data["properties"]["periods"]
+    forecasts = []
+    for period in periods[:5]:  # 次の 5 期間のみを表示
+        forecast = f"""
+{period['name']}:
+気温: {period['temperature']}°{period['temperatureUnit']}
+風: {period['windSpeed']} {period['windDirection']}
+予報: {period['detailedForecast']}
+"""
+        forecasts.append(forecast)
+
+    return "\n---\n".join(forecasts)
+```
+
+### サーバーの実行
+
+最後に、サーバーを初期化して実行しましょう。
+
+```python
+if __name__ == "__main__":
+    # サーバーを初期化して実行
+    mcp.run(transport='stdio')
+```
+
+サーバーが完成しました！`uv run weather.py` を実行して、すべてが動作していることを確認してください。
+
+既存の MCP ホストである Claude for Desktop からサーバーをテストしてみましょう。
+
+## Claude for Desktop でサーバーをテストする
+
+<Note>
+Claude for Desktop はまだ Linux では利用できません。Linux ユーザーは、[クライアントの構築](/quickstart/client)チュートリアルに進んで、構築したサーバーに接続する MCP クライアントを構築できます。
+</Note>
+
+まず、Claude for Desktop がインストールされていることを確認してください。[最新バージョンはこちらからインストールできます。](https://claude.ai/download) すでに Claude for Desktop がインストールされている場合は、**最新バージョンにアップデートされていることを確認してください。**
+
+使用したい MCP サーバーに合わせて Claude for Desktop を設定する必要があります。これを行うには、テキストエディタで `~/Library/Application Support/Claude/claude_desktop_config.json` にある Claude for Desktop アプリケーション設定を開きます。ファイルが存在しない場合は、作成してください。
+
+たとえば、[VS Code](https://code.visualstudio.com/) がインストールされている場合:
+
+<Tabs>
+<Tab title="MacOS/Linux">
+```bash
+code ~/Library/Application\ Support/Claude/claude_desktop_config.json
+```
+</Tab>
+<Tab title="Windows">
+```powershell
+code $env:AppData\Claude\claude_desktop_config.json
+```
+</Tab>
+</Tabs>
+
+次に、`mcpServers` キーにサーバーを追加します。MCP UI 要素は、少なくとも 1 つのサーバーが適切に設定されている場合にのみ Claude for Desktop に表示されます。
+
+この場合、単一の天気サーバーを次のように追加します。
+
+<Tabs>
+<Tab title="MacOS/Linux">
+```json Python
+{
+    "mcpServers": {
+        "weather": {
+            "command": "uv",
+            "args": [
+                "--directory",
+                "/ABSOLUTE/PATH/TO/PARENT/FOLDER/weather",
+                "run",
+                "weather.py"
+            ]
+        }
+    }
+}
+```
+</Tab>
+<Tab title="Windows">
+```json Python
+{
+    "mcpServers": {
+        "weather": {
+            "command": "uv",
+            "args": [
+                "--directory",
+                "C:\\ABSOLUTE\\PATH\\TO\\PARENT\\FOLDER\\weather",
+                "run",
+                "weather.py"
+            ]
+        }
+    }
+}
+```
+</Tab>
+</Tabs>
+
+<Warning>
+`command` フィールドに `uv` 実行可能ファイルへのフルパスを入力する必要がある場合があります。これは、MacOS/Linux で `which uv` を実行するか、Windows で `where uv` を実行することで取得できます。
+</Warning>
+
+<Note>
+サーバーへの絶対パスを渡してください。
+</Note>
+
+これは Claude for Desktop に次のように伝えます。
+1. "weather" という名前の MCP サーバーがある
+2. `uv --directory /ABSOLUTE/PATH/TO/PARENT/FOLDER/weather run weather` を実行して起動する
+
+ファイルを保存し、**Claude for Desktop** を再起動します。
+</Tab>
+
+<Tab title="Node">
+天気サーバーの構築を始めましょう！[ここで構築するものの完全なコードを見つけることができます。](https://github.com/modelcontextprotocol/quickstart-resources/tree/main/weather-server-typescript)
+
+### 前提知識
+
+このクイックスタートは、以下の知識があることを前提としています。
+- TypeScript
+- Claude のような LLM
+
+### システム要件
+
+TypeScript の場合、Node の最新バージョンがインストールされていることを確認してください。
+
+### 環境設定
+これは、より大きなテキストの4部構成のうちのパート2です。
+ソース言語は自動的に検出されます。
+翻訳されたテキストのみを返し、説明や追加情報は不要です。
+
+テキスト: "まず、Node.jsとnpmがまだインストールされていない場合はインストールしましょう。これらは[nodejs.org](https://nodejs.org/)からダウンロードできます。
+Node.jsのインストールを確認してください:
+```bash
+node --version
+npm --version
+```
+このチュートリアルでは、Node.jsバージョン16以降が必要です。
+
+次に、プロジェクトを作成してセットアップしましょう:
+
+<CodeGroup>
+```bash MacOS/Linux
+# プロジェクト用の新しいディレクトリを作成
+mkdir weather
+cd weather
+
+# 新しいnpmプロジェクトを初期化
+npm init -y
+
+# 依存関係をインストール
+npm install @modelcontextprotocol/sdk zod
+npm install -D @types/node typescript
+
+# ファイルを作成
+mkdir src
+touch src/index.ts
+```
+
+```powershell Windows
+# プロジェクト用の新しいディレクトリを作成
+md weather
+cd weather
+
+# 新しいnpmプロジェクトを初期化
+npm init -y
+
+# 依存関係をインストール
+npm install @modelcontextprotocol/sdk zod
+npm install -D @types/node typescript
+
+# ファイルを作成
+md src
+new-item src\index.ts
+```
+</CodeGroup>
+
+package.jsonを更新して、type: "module"とbuildスクリプトを追加します:
+
+```json package.json
+{
+  "type": "module",
+  "bin": {
+    "weather": "./build/index.js"
+  },
+  "scripts": {
+    "build": "tsc && node -e \"require('fs').chmodSync('build/index.js', '755')\"",
+  },
+  "files": [
+    "build"
+  ],
+}
+```
+
+プロジェクトのルートに`tsconfig.json`を作成します:
+
+```json tsconfig.json
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "Node16",
+    "moduleResolution": "Node16",
+    "outDir": "./build",
+    "rootDir": "./src",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true
+  },
+  "include": ["src/**/*"],
+  "exclude": ["node_modules"]
+}
+```
+
+それでは、サーバーの構築に入りましょう。
+
+## サーバーの構築
+
+### パッケージのインポートとインスタンスのセットアップ
+
+`src/index.ts`の先頭に以下を追加します:
+```typescript
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { z } from "zod";
+
+const NWS_API_BASE = "https://api.weather.gov";
+const USER_AGENT = "weather-app/1.0";
+
+// サーバーインスタンスを作成
+const server = new McpServer({
+  name: "weather",
+  version: "1.0.0",
+});
+```
+
+### ヘルパー関数
+
+次に、米国国立気象局APIからデータをクエリしてフォーマットするためのヘルパー関数を追加しましょう:
+
+```typescript
+// NWS APIリクエストを行うためのヘルパー関数
+async function makeNWSRequest<T>(url: string): Promise<T | null> {
+  const headers = {
+    "User-Agent": USER_AGENT,
+    Accept: "application/geo+json",
+  };
+
+  try {
+    const response = await fetch(url, { headers });
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    return (await response.json()) as T;
+  } catch (error) {
+    console.error("Error making NWS request:", error);
+    return null;
+  }
+}
+
+interface AlertFeature {
+  properties: {
+    event?: string;
+    areaDesc?: string;
+    severity?: string;
+    status?: string;
+    headline?: string;
+  };
+}
+
+// 警報データをフォーマット
+function formatAlert(feature: AlertFeature): string {
+  const props = feature.properties;
+  return [
+    `Event: ${props.event || "Unknown"}`,
+    `Area: ${props.areaDesc || "Unknown"}`,
+    `Severity: ${props.severity || "Unknown"}`,
+    `Status: ${props.status || "Unknown"}`,
+    `Headline: ${props.headline || "No headline"}`,
+    "---",
+  ].join("\n");
+}
+
+interface ForecastPeriod {
+  name?: string;
+  temperature?: number;
+  temperatureUnit?: string;
+  windSpeed?: string;
+  windDirection?: string;
+  shortForecast?: string;
+}
+
+interface AlertsResponse {
+  features: AlertFeature[];
+}
+
+interface PointsResponse {
+  properties: {
+    forecast?: string;
+  };
+}
+
+interface ForecastResponse {
+  properties: {
+    periods: ForecastPeriod[];
+  };
+}
+```
+
+### ツールの実行の実装
+
+ツールの実行ハンドラーは、各ツールのロジックを実際に実行する役割を担います。追加しましょう:
+
+```typescript
+// 天気ツールの登録
+server.tool(
+  "get-alerts",
+  "州の天気警報を取得",
+  {
+    state: z.string().length(2).describe("2文字の州コード (例: CA, NY)"),
+  },
+  async ({ state }) => {
+    const stateCode = state.toUpperCase();
+    const alertsUrl = `${NWS_API_BASE}/alerts?area=${stateCode}`;
+    const alertsData = await makeNWSRequest<AlertsResponse>(alertsUrl);
+
+    if (!alertsData) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: "警報データの取得に失敗しました",
+          },
+        ],
+      };
+    }
+
+    const features = alertsData.features || [];
+    if (features.length === 0) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: `${stateCode} に現在有効な警報はありません`,
+          },
+        ],
+      };
+    }
+
+    const formattedAlerts = features.map(formatAlert);
+    const alertsText = `${stateCode} の現在有効な警報:\n\n${formattedAlerts.join("\n")}`;
+
+    return {
+      content: [
+        {
+          type: "text",
+          text: alertsText,
+        },
+      ],
+    };
+  },
+);
+
+server.tool(
+  "get-forecast",
+  "場所の天気予報を取得",
+  {
+    latitude: z.number().min(-90).max(90).describe("場所の緯度"),
+    longitude: z.number().min(-180).max(180).describe("場所の経度"),
+  },
+  async ({ latitude, longitude }) => {
+    // グリッドポイントデータを取得
+    const pointsUrl = `${NWS_API_BASE}/points/${latitude.toFixed(4)},${longitude.toFixed(4)}`;
+    const pointsData = await makeNWSRequest<PointsResponse>(pointsUrl);
+
+    if (!pointsData) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: `座標: ${latitude}, ${longitude} のグリッドポイントデータの取得に失敗しました。この場所はNWS APIでサポートされていない可能性があります (米国内の場所のみサポートされています)。`,
+          },
+        ],
+      };
+    }
+
+    const forecastUrl = pointsData.properties?.forecast;
+    if (!forecastUrl) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: "グリッドポイントデータから予報URLを取得できませんでした",
+          },
+        ],
+      };
+    }
+
+    // 予報データを取得
+    const forecastData = await makeNWSRequest<ForecastResponse>(forecastUrl);
+    if (!forecastData) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: "予報データの取得に失敗しました",
+          },
+        ],
+      };
+    }
+
+    const periods = forecastData.properties?.periods || [];
+    if (periods.length === 0) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: "利用可能な予報期間はありません",
+          },
+        ],
+      };
+    }
+
+    // 予報期間をフォーマット
+    const formattedForecast = periods.map((period: ForecastPeriod) =>
+      [
+        `${period.name || "不明"}:`,
+        `気温: ${period.temperature || "不明"}°${period.temperatureUnit || "F"}`,
+        `風: ${period.windSpeed || "不明"} ${period.windDirection || ""}`,
+        `${period.shortForecast || "予報はありません"}`,
+        "---",
+      ].join("\n"),
+    );
+
+    const forecastText = `${latitude}, ${longitude} の予報:\n\n${formattedForecast.join("\n")}`;
+
+    return {
+      content: [
+        {
+          type: "text",
+          text: forecastText,
+        },
+      ],
+    };
+  },
+);
+```
+
+### サーバーの実行
+
+最後に、サーバーを実行するためのmain関数を実装します:
+
+```typescript
+async function main() {
+  const transport = new StdioServerTransport();
+  await server.connect(transport);
+  console.error("Weather MCP Server running on stdio");
+}
+
+main().catch((error) => {
+  console.error("Fatal error in main():", error);
+  process.exit(1);
+});
+```
+
+`npm run build`を実行してサーバーをビルドしてください！これは、サーバーを接続するために非常に重要なステップです。
+
+既存のMCPホストであるClaude for Desktopからサーバーをテストしてみましょう。
+
+## Claude for Desktopでサーバーをテストする
+
+<Note>
+Claude for DesktopはまだLinuxでは利用できません。Linuxユーザーは、[クライアントの構築](/quickstart/client)チュートリアルに進んで、先ほど構築したサーバーに接続するMCPクライアントを構築できます。
+</Note>
+
+まず、Claude for Desktopがインストールされていることを確認してください。[最新バージョンはこちらからインストールできます。](https://claude.ai/download) すでにClaude for Desktopをお持ちの場合は、**最新バージョンに更新されていることを確認してください。**
+
+使用したいMCPサーバーに合わせてClaude for Desktopを設定する必要があります。これを行うには、テキストエディタで`~/Library/Application Support/Claude/claude_desktop_config.json`にあるClaude for Desktopアプリの設定を開きます。ファイルが存在しない場合は、作成してください。
+
+たとえば、[VS Code](https://code.visualstudio.com/)がインストールされている場合:
+
+<Tabs>
+<Tab title="MacOS/Linux">
+```bash
+code ~/Library/Application\ Support/Claude/claude_desktop_config.json
+```
+</Tab>
+<Tab title="Windows">
+```powershell
+code $env:AppData\Claude\claude_desktop_config.json
+```
+</Tab>
+</Tabs>
+
+次に、`mcpServers`キーにサーバーを追加します。MCP UI要素は、少なくとも1つのサーバーが正しく設定されている場合にのみClaude for Desktopに表示されます。
+
+この場合、単一の天気サーバーを次のように追加します:
+
+<Tabs>
+<Tab title="MacOS/Linux">
+<CodeGroup>
+```json Node
+{
+    "mcpServers": {
+        "weather": {
+            "command": "node",
+            "args": [
+                "/ABSOLUTE/PATH/TO/PARENT/FOLDER/weather/build/index.js"
+            ]
+        }
+    }
+}
+```
+</CodeGroup>
+</Tab>
+<Tab title="Windows">
+<CodeGroup>
+```json Node
+{
+    "mcpServers": {
+        "weather": {
+            "command": "node",
+            "args": [
+                "C:\\PATH\\TO\\PARENT\\FOLDER\\weather\\build\\index.js"
+            ]
+        }
+    }
+}
+```
+</CodeGroup>
+</Tab>
+</Tabs>
+
+これはClaude for Desktopに以下を伝えます:
+1. "weather"という名前のMCPサーバーがある
+2. `node /ABSOLUTE/PATH/TO/PARENT/FOLDER/weather/build/index.js`を実行して起動する
+
+ファイルを保存し、**Claude for Desktop**を再起動します。
+</Tab>
+<Tab title='Java'>"
+<Note>
+これは、Spring AI MCP 自動構成と Boot スターターに基づいたクイックスタートデモです。
+同期および非同期 MCP サーバーを手動で作成する方法については、[Java SDK Server](/sdk/java/mcp-server) ドキュメントを参照してください。
+</Note>
+
+それでは、天気サーバーの構築を始めましょう！
+[ここで構築するものの完全なコードを見つけることができます。](https://github.com/spring-projects/spring-ai-examples/tree/main/model-context-protocol/weather/starter-stdio-server)
+
+詳細については、[MCP Server Boot Starter](https://docs.spring.io/spring-ai/reference/api/mcp/mcp-server-boot-starter-docs.html) のリファレンスドキュメントを参照してください。
+手動での MCP サーバーの実装については、[MCP Server Java SDK ドキュメント](/sdk/java/mcp-server) を参照してください。
+
+### システム要件
+
+- Java 17 以上がインストールされていること。
+- [Spring Boot 3.3.x](https://docs.spring.io/spring-boot/installing.html) 以上
+
+### 環境設定
+
+[Spring Initializer](https://start.spring.io/) を使用してプロジェクトをブートストラップします。
+
+次の依存関係を追加する必要があります。
+
+<Tabs>
+  <Tab title="Maven">
+  ```xml
+  <dependencies>
+        <dependency>
+            <groupId>org.springframework.ai</groupId>
+            <artifactId>spring-ai-mcp-server-spring-boot-starter</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework</groupId>
+            <artifactId>spring-web</artifactId>
+        </dependency>
+  </dependencies>
+  ```
+  </Tab>
+  <Tab title="Gradle">
+  ```groovy
+  dependencies {
+    implementation platform("org.springframework.ai:spring-ai-mcp-server-spring-boot-starter")
+    implementation platform("org.springframework:spring-web")
+  }
+  ```
+  </Tab>
+</Tabs>
+
+次に、アプリケーションプロパティを設定してアプリケーションを構成します。
+
+<CodeGroup>
+
+```bash application.properties
+spring.main.bannerMode=off
+logging.pattern.console=
+```
+
+```yaml application.yml
+logging:
+  pattern:
+    console:
+spring:
+  main:
+    banner-mode: off
+```
+</CodeGroup>
+
+[サーバー構成プロパティ](https://docs.spring.io/spring-ai/reference/api/mcp/mcp-server-boot-starter-docs.html#_configuration_properties) ドキュメントには、利用可能なすべてのプロパティが記載されています。
+
+それでは、サーバーの構築に入りましょう。
+
+## サーバーの構築
+
+### Weather Service
+
+National Weather Service API からデータをクエリするために REST クライアントを使用する [WeatheService.java](https://github.com/spring-projects/spring-ai-examples/blob/main/model-context-protocol/weather/starter-stdio-server/src/main/java/org/springframework/ai/mcp/sample/server/WeatherService.java) を実装しましょう。
+
+```java
+@Service
+public class WeatherService {
+
+	private final RestClient restClient;
+
+	public WeatherService() {
+		this.restClient = RestClient.builder()
+			.baseUrl("https://api.weather.gov")
+			.defaultHeader("Accept", "application/geo+json")
+			.defaultHeader("User-Agent", "WeatherApiClient/1.0 (your@email.com)")
+			.build();
+	}
+
+  @Tool(description = "特定の緯度/経度の天気予報を取得")
+  public String getWeatherForecastByLocation(
+      double latitude,   // 緯度座標
+      double longitude   // 経度座標
+  ) {
+      // 以下の詳細な予報を返します。
+      // - 気温と単位
+      // - 風速と風向
+      // - 詳細な予報の説明
+  }
+
+  @Tool(description = "米国の州の気象警報を取得")
+  public String getAlerts(
+      @ToolParam(description = "2 文字の米国州コード (例: CA, NY)") String state)
+  ) {
+      // 以下の有効な警報を返します。
+      // - イベントタイプ
+      // - 影響を受ける地域
+      // - 重大度
+      // - 説明
+      // - 安全指示
+  }
+
+  // ......
+}
+```
+
+`@Service` アノテーションは、アプリケーションコンテキストにサービスを自動登録します。
+Spring AI の `@Tool` アノテーションは、MCP ツールを簡単に作成および保守できるようにします。
+
+自動構成により、これらのツールは MCP サーバーに自動的に登録されます。
+
+### Boot アプリケーションの作成
+
+```java
+@SpringBootApplication
+public class McpServerApplication {
+
+	public static void main(String[] args) {
+		SpringApplication.run(McpServerApplication.class, args);
+	}
+
+	@Bean
+	public ToolCallbackProvider weatherTools(WeatherService weatherService) {
+		return  MethodToolCallbackProvider.builder().toolObjects(weatherService).build();
+	}
+}
+```
+
+`MethodToolCallbackProvider` ユーティリティを使用して、`@Tools` を MCP サーバーで使用される実行可能なコールバックに変換します。
+
+### サーバーの実行
+
+最後に、サーバーをビルドしましょう。
+
+```bash
+./mvnw clean install
+```
+
+これにより、`target` フォルダー内に `mcp-weather-stdio-server-0.0.1-SNAPSHOT.jar` ファイルが生成されます。
+
+既存の MCP ホストである Claude for Desktop からサーバーをテストしてみましょう。
+
+## Claude for Desktop でのサーバーのテスト
+
+<Note>
+Claude for Desktop はまだ Linux では利用できません。
+</Note>
+
+まず、Claude for Desktop がインストールされていることを確認してください。
+[最新バージョンはこちらからインストールできます。](https://claude.ai/download) すでに Claude for Desktop をお持ちの場合は、**最新バージョンにアップデートされていることを確認してください。**
+
+使用したい MCP サーバーに合わせて Claude for Desktop を構成する必要があります。
+これを行うには、テキストエディタで `~/Library/Application Support/Claude/claude_desktop_config.json` にある Claude for Desktop アプリケーション構成を開きます。
+ファイルが存在しない場合は、作成してください。
+
+たとえば、[VS Code](https://code.visualstudio.com/) がインストールされている場合：
+
+<Tabs>
+  <Tab title="MacOS/Linux">
+  ```bash
+  code ~/Library/Application\ Support/Claude/claude_desktop_config.json
+  ```
+  </Tab>
+  <Tab title="Windows">
+  ```powershell
+  code $env:AppData\Claude\claude_desktop_config.json
+  ```
+  </Tab>
+</Tabs>
+
+次に、`mcpServers` キーにサーバーを追加します。
+MCP UI 要素は、少なくとも 1 つのサーバーが適切に構成されている場合にのみ、Claude for Desktop に表示されます。
+
+この例では、単一の天気サーバーを次のように追加します。
+
+<Tabs>
+  <Tab title="MacOS/Linux">
+  ```json java
+  {
+    "mcpServers": {
+      "spring-ai-mcp-weather": {
+        "command": "java",
+        "args": [
+          "-Dspring.ai.mcp.server.stdio=true",
+          "-jar",
+          "/ABSOLUTE/PATH/TO/PARENT/FOLDER/mcp-weather-stdio-server-0.0.1-SNAPSHOT.jar"
+        ]
+      }
+    }
+  }
+  ```
+  </Tab>
+
+  <Tab title="Windows">
+  ```json java
+  {
+    "mcpServers": {
+      "spring-ai-mcp-weather": {
+        "command": "java",
+        "args": [
+          "-Dspring.ai.mcp.server.transport=STDIO",
+          "-jar",
+          "C:\\ABSOLUTE\\PATH\\TO\\PARENT\\FOLDER\\weather\\mcp-weather-stdio-server-0.0.1-SNAPSHOT.jar"
+        ]
+      }
+    }
+  }
+  ```
+  </Tab>
+</Tabs>
+
+<Note>
+サーバーへの絶対パスを必ず渡してください。
+</Note>
+
+これは Claude for Desktop に次のことを伝えます。
+1. 「my-weather-server」という名前の MCP サーバーがある
+2. `java -jar /ABSOLUTE/PATH/TO/PARENT/FOLDER/mcp-weather-stdio-server-0.0.1-SNAPSHOT.jar` を実行して起動する
+
+ファイルを保存し、**Claude for Desktop** を再起動します。
+
+## Java クライアントでのサーバーのテスト
+
+### MCP クライアントの手動作成
+
+`McpClient` を使用してサーバーに接続します。
+
+```java
+var stdioParams = ServerParameters.builder("java")
+  .args("-jar", "/ABSOLUTE/PATH/TO/PARENT/FOLDER/mcp-weather-stdio-server-0.0.1-SNAPSHOT.jar")
+  .build();
+
+var stdioTransport = new StdioClientTransport(stdioParams);
+
+var mcpClient = McpClient.sync(stdioTransport).build();
+
+mcpClient.initialize();
+
+ListToolsResult toolsList = mcpClient.listTools();
+
+CallToolResult weather = mcpClient.callTool(
+  new CallToolRequest("getWeatherForecastByLocation",
+      Map.of("latitude", "47.6062", "longitude", "-122.3321")));
+
+CallToolResult alert = mcpClient.callTool(
+  new CallToolRequest("getAlerts", Map.of("state", "NY")));
+
+mcpClient.closeGracefully();
+```
+
+### MCP Client Boot Starter の使用
+
+`spring-ai-mcp-client-spring-boot-starter` 依存関係を使用して、新しい Boot Starter アプリケーションを作成します。
+
+```xml
+<dependency>
+    <groupId>org.springframework.ai</groupId>
+    <artifactId>spring-ai-mcp-client-spring-boot-starter</artifactId>
+</dependency>
+```
+
+`spring.ai.mcp.client.stdio.servers-configuration` プロパティを `claude_desktop_config.json` を指すように設定します。
+既存の Anthropic Desktop 構成を再利用できます。
+
+```properties
+spring.ai.mcp.client.stdio.servers-configuration=file:PATH/TO/claude_desktop_config.json
+```
+
+クライアントアプリケーションを起動すると、自動構成により、claude_desktop_config.json から MCP クライアントが自動的に作成されます。
+
+詳細については、[MCP Client Boot Starters](https://docs.spring.io/spring-ai/reference/api/mcp/mcp-server-boot-client-docs.html) リファレンスドキュメントを参照してください。
+
+## その他の Java MCP サーバーの例
+
+[starter-webflux-server](https://github.com/spring-projects/spring-ai-examples/tree/main/model-context-protocol/weather/starter-webflux-server) は、SSE トランスポートを使用して MCP サーバーを作成する方法を示しています。
+Spring Boot の自動構成機能を使用して、MCP ツール、リソース、およびプロンプトを定義および登録する方法を紹介します。
+
+</Tab>
+</Tabs>
+
+### コマンドでのテスト
+
+Claude for Desktop が `weather` サーバーで公開した 2 つのツールを認識していることを確認しましょう。ハンマー <img src="/images/claude-desktop-mcp-hammer-icon.svg" style={{display: 'inline', margin: 0, height: '1.3em'}} /> アイコンを探すことで確認できます。
+
+<Frame>
+  <img src="/images/visual-indicator-mcp-tools.png" />
+</Frame>
+
+ハンマーアイコンをクリックすると、2 つのツールがリストされているはずです。
+
+<Frame>
+  <img src="/images/available-mcp-tools.png" />
+</Frame>
+
+サーバーが Claude for Desktop に認識されない場合は、[トラブルシューティング](#troubleshooting) セクションに進んでデバッグのヒントを参照してください。
+
+ハンマーアイコンが表示されたら、Claude for Desktop で次のコマンドを実行してサーバーをテストできます。
+
+- サクラメントの天気は？
+- テキサス州で有効な気象警報は？
+
+<Frame>
+  <img src="/images/current-weather.png" />
+</Frame>
+<Frame>
+  <img src="/images/weather-alerts.png" />
+</Frame>
+<Note>
+米国国立気象局であるため、クエリは米国内の場所でのみ機能します。
+</Note>
+
+## 裏側で何が起こっているか
+
+質問をすると：
+
+1. クライアントが質問をClaudeに送信します
+2. Claudeが利用可能なツールを分析し、使用するツールを決定します
+3. クライアントがMCPサーバーを介して選択されたツールを実行します
+4. 結果がClaudeに送り返されます
+5. Claudeが自然言語の応答を作成します
+6. 応答があなたに表示されます！
+
+## トラブルシューティング
+
+<AccordionGroup>
+<Accordion title="Claude for Desktopの統合に関する問題">
+**Claude for Desktopからログを取得する**
+
+MCPに関連するClaude.appのログは、`~/Library/Logs/Claude`内のログファイルに書き込まれます。
+
+- `mcp.log`には、MCP接続と接続障害に関する一般的なログが含まれます。
+- `mcp-server-SERVERNAME.log`という名前のファイルには、指定されたサーバーからのエラー（stderr）ログが含まれます。
+
+次のコマンドを実行すると、最近のログをリスト表示し、新しいログを追跡できます。
+```bash
+# Claudeのログでエラーを確認する
+tail -n 20 -f ~/Library/Logs/Claude/mcp*.log
+```
+
+**サーバーがClaudeに表示されない**
+
+1. `claude_desktop_config.json`ファイルの構文を確認してください
+2. プロジェクトへのパスが絶対パスであり、相対パスではないことを確認してください
+3. Claude for Desktopを完全に再起動してください
+
+**ツール呼び出しがサイレントに失敗する**
+
+Claudeがツールを使用しようとしたが失敗した場合：
+
+1. Claudeのログでエラーを確認してください
+2. サーバーがエラーなしでビルドおよび実行されることを確認してください
+3. Claude for Desktopを再起動してみてください
+
+**どれもうまくいかない場合、どうすればよいですか？**
+
+より優れたデバッグツールと詳細なガイダンスについては、[デバッグガイド](/docs/tools/debugging)を参照してください。
+</Accordion>
+<Accordion title="天気APIの問題">
+**エラー：グリッドポイントデータの取得に失敗しました**
+
+これは通常、次のいずれかを意味します。
+1. 座標が米国外にある
+2. NWS APIに問題が発生している
+3. レート制限されている
+
+修正：
+
+- 米国の座標を使用していることを確認してください
+- リクエスト間に短い遅延を追加してください
+- NWS APIのステータスページを確認してください
+
+**エラー：[STATE]のアクティブなアラートはありません**
+
+これはエラーではありません。単にその州に現在、気象警報がないことを意味します。別の州を試すか、悪天候時に確認してください。
+</Accordion>
+
+</AccordionGroup>
+
+<Note>
+より高度なトラブルシューティングについては、[MCPのデバッグ](/docs/tools/debugging)に関するガイドをご覧ください。
+</Note>
+
+## 次のステップ
+
+<CardGroup cols={2}>
+  <Card
+    title="クライアントの構築"
+    icon="outlet"
+    href="/quickstart/client"
+  >
+    サーバーに接続できる独自のMCPクライアントを構築する方法を学びます
+  </Card>
+  <Card
+    title="サーバーの例"
+    icon="grid"
+    href="/examples"
+  >
+    公式MCPサーバーと実装のギャラリーをご覧ください
+  </Card>
+  <Card
+    title="デバッグガイド"
+    icon="bug"
+    href="/docs/tools/debugging"
+  >
+    MCPサーバーと統合を効果的にデバッグする方法を学びます
+  </Card>
+  <Card
+    title="LLMを使用したMCPの構築"
+    icon="comments"
+    href="/building-mcp-with-llms"
+  >
+    ClaudeのようなLLMを使用してMCP開発をスピードアップする方法を学びます
+  </Card>
+</CardGroup>

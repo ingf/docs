@@ -1,0 +1,610 @@
+ ---
+title: "クライアント開発者向け"
+description: "すべてのMCPサーバーと統合できる独自のクライアントの構築を始めましょう。"
+---
+
+このチュートリアルでは、MCPサーバーに接続するLLM駆動のチャットボットクライアントの構築方法を学びます。最初のサーバー構築の基本を案内する[サーバークイックスタート](/quickstart/server)を先に進めておくと役立ちます。
+
+<Tabs>
+<Tab title="Python">
+
+[このチュートリアルの完全なコードはこちらで見つけることができます。](https://github.com/modelcontextprotocol/quickstart-resources/tree/main/mcp-client)
+
+## システム要件
+
+始める前に、システムが以下の要件を満たしていることを確認してください：
+- MacまたはWindowsコンピュータ
+- 最新のPythonバージョンがインストールされていること
+- 最新バージョンの`uv`がインストールされていること
+
+## 環境のセットアップ
+
+まず、`uv`を使って新しいPythonプロジェクトを作成します：
+
+```bash
+# プロジェクトディレクトリを作成
+uv init mcp-client
+cd mcp-client
+
+# 仮想環境を作成
+uv venv
+
+# 仮想環境を有効化
+# Windowsの場合：
+.venv\Scripts\activate
+# UnixまたはMacOSの場合：
+source .venv/bin/activate
+
+# 必要なパッケージをインストール
+uv add mcp anthropic python-dotenv
+
+# ボイラープレートファイルを削除
+rm hello.py
+
+# メインファイルを作成
+touch client.py
+```
+
+## APIキーのセットアップ
+
+[Anthropic Console](https://console.anthropic.com/settings/keys)からAnthropicのAPIキーが必要になります。
+
+それを保存するための`.env`ファイルを作成します：
+
+```bash
+# .envファイルを作成
+touch .env
+```
+
+`.env`ファイルにキーを追加します：
+```bash
+ANTHROPIC_API_KEY=<あなたのキーをここに入力>
+```
+
+`.gitignore`に`.env`を追加します：
+```bash
+echo ".env" >> .gitignore
+```
+
+<Warning>
+`ANTHROPIC_API_KEY`を安全に保管してください！
+</Warning>
+
+## クライアントの作成
+
+### 基本的なクライアント構造
+まず、インポートを設定し、基本的なクライアントクラスを作成しましょう：
+
+```python
+import asyncio
+from typing import Optional
+from contextlib import AsyncExitStack
+
+from mcp import ClientSession, StdioServerParameters
+from mcp.client.stdio import stdio_client
+
+from anthropic import Anthropic
+from dotenv import load_dotenv
+
+load_dotenv()  # .envファイルから環境変数を読み込む
+
+class MCPClient:
+    def __init__(self):
+        # セッションとクライアントオブジェクトを初期化
+        self.session: Optional[ClientSession] = None
+        self.exit_stack = AsyncExitStack()
+        self.anthropic = Anthropic()
+    # メソッドがここに入ります
+```
+
+### サーバー接続管理
+
+次に、MCPサーバーに接続するためのメソッドを実装します：
+
+```python
+async def connect_to_server(self, server_script_path: str):
+    """MCPサーバーに接続する
+
+    Args:
+        server_script_path: サーバースクリプトへのパス（.pyまたは.js）
+    """
+    is_python = server_script_path.endswith('.py')
+    is_js = server_script_path.endswith('.js')
+    if not (is_python or is_js):
+        raise ValueError("サーバースクリプトは.pyまたは.jsファイルである必要があります")
+
+    command = "python" if is_python else "node"
+    server_params = StdioServerParameters(
+        command=command,
+        args=[server_script_path],
+        env=None
+    )
+
+    stdio_transport = await self.exit_stack.enter_async_context(stdio_client(server_params))
+    self.stdio, self.write = stdio_transport
+    self.session = await self.exit_stack.enter_async_context(ClientSession(self.stdio, self.write))
+
+    await self.session.initialize()
+
+    # 利用可能なツールを一覧表示
+    response = await self.session.list_tools()
+    tools = response.tools
+    print("\nサーバーに接続しました。利用可能なツール:", [tool.name for tool in tools])
+```
+
+### クエリ処理ロジック
+
+次に、クエリの処理とツール呼び出しの処理のためのコア機能を追加します：
+
+```python
+async def process_query(self, query: str) -> str:
+    """Claudeと利用可能なツールを使用してクエリを処理する"""
+    messages = [
+        {
+            "role": "user",
+            "content": query
+        }
+    ]
+
+    response = await self.session.list_tools()
+    available_tools = [{
+        "name": tool.name,
+        "description": tool.description,
+        "input_schema": tool.inputSchema
+    } for tool in response.tools]
+
+    # 初期Claude API呼び出し
+    response = self.anthropic.messages.create(
+        model="claude-3-5-sonnet-20241022",
+        max_tokens=1000,
+        messages=messages,
+        tools=available_tools
+    )
+
+    # レスポンスを処理し、ツール呼び出しを処理する
+    tool_results = []
+    final_text = []
+
+    assistant_message_content = []
+    for content in response.content:
+        if content.type == 'text':
+            final_text.append(content.text)
+            assistant_message_content.append(content)
+        elif content.type == 'tool_use':
+            tool_name = content.name
+            tool_args = content.input
+
+            # ツール呼び出しを実行
+            result = await self.session.call_tool(tool_name, tool_args)
+            tool_results.append({"call": tool_name, "result": result})
+            final_text.append(f"[ツール {tool_name} を引数 {tool_args} で呼び出し中]")
+
+            assistant_message_content.append(content)
+            messages.append({
+                "role": "assistant",
+                "content": assistant_message_content
+            })
+            messages.append({
+                "role": "user",
+                "content": [
+                    {
+                        "type": "tool_result",
+                        "tool_use_id": content.id,
+                        "content": result.content
+                    }
+                ]
+            })
+
+            # Claudeから次のレスポンスを取得
+            response = self.anthropic.messages.create(
+                model="claude-3-5-sonnet-20241022",
+                max_tokens=1000,
+                messages=messages,
+                tools=available_tools
+            )
+
+            final_text.append(response.content[0].text)
+
+    return "\n".join(final_text)
+```
+
+### インタラクティブなチャットインターフェース
+ここでチャットループとクリーンアップ機能を追加します：
+
+```python
+async def chat_loop(self):
+    """インタラクティブなチャットループを実行する"""
+    print("\nMCPクライアントが起動しました！")
+    print("クエリを入力するか、'quit'と入力して終了します。")
+
+    while True:
+        try:
+            query = input("\nクエリ: ").strip()
+
+            if query.lower() == 'quit':
+                break
+
+            response = await self.process_query(query)
+            print("\n" + response)
+
+        except Exception as e:
+            print(f"\nエラー: {str(e)}")
+
+async def cleanup(self):
+    """リソースをクリーンアップする"""
+    await self.exit_stack.aclose()
+```
+
+### メインエントリーポイント
+
+最後に、メイン実行ロジックを追加します：
+
+```python
+async def main():
+    if len(sys.argv) < 2:
+        print("使用法: python client.py <サーバースクリプトへのパス>")
+        sys.exit(1)
+
+    client = MCPClient()
+    try:
+        await client.connect_to_server(sys.argv[1])
+        await client.chat_loop()
+    finally:
+        await client.cleanup()
+
+if __name__ == "__main__":
+    import sys
+    asyncio.run(main())
+```
+
+完全な`client.py`ファイルは[こちら](https://gist.github.com/zckly/f3f28ea731e096e53b39b47bf0a2d4b1)で見つけることができます。
+
+## 主要コンポーネントの説明
+
+### 1. クライアント初期化
+- `MCPClient`クラスはセッション管理とAPIクライアントで初期化されます
+- 適切なリソース管理のために`AsyncExitStack`を使用
+- Claude対話のためのAnthropicクライアントを設定
+
+### 2. サーバー接続
+- PythonとNode.jsサーバーの両方をサポート
+- サーバースクリプトタイプを検証
+- 適切な通信チャネルをセットアップ
+- セッションを初期化し、利用可能なツールを一覧表示
+
+### 3. クエリ処理
+- 会話コンテキストを維持
+- Claudeのレスポンスとツール呼び出しを処理
+- Claudeとツールとのメッセージフローを管理
+- 結果を一貫したレスポンスにまとめる
+
+### 4. インタラクティブなインターフェース
+- シンプルなコマンドラインインターフェースを提供
+- ユーザー入力を処理し、レスポンスを表示
+- 基本的なエラー処理を含む
+- 適切な終了を可能にする
+
+### 5. リソース管理
+- リソースの適切なクリーンアップ
+- 接続問題のエラー処理
+- 適切なシャットダウン手順
+
+## 一般的なカスタマイズポイント
+
+1. **ツール処理**
+   - 特定のツールタイプを処理するために`process_query()`を変更
+   - ツール呼び出しのカスタムエラー処理を追加
+   - ツール固有のレスポンスフォーマットを実装
+
+2. **レスポンス処理**
+   - ツール結果のフォーマット方法をカスタマイズ
+   - レスポンスのフィルタリングや変換を追加
+   - カスタムロギングを実装
+
+3. **ユーザーインターフェース**
+   - GUIまたはWebインターフェースを追加
+   - リッチなコンソール出力を実装
+   - コマンド履歴やオートコンプリートを追加
+
+## クライアントの実行
+
+任意のMCPサーバーでクライアントを実行するには：
+
+```bash
+uv run client.py サーバーへのパス.py # Pythonサーバー
+uv run client.py サーバーへのパス/build/index.js # Nodeサーバー
+```
+
+<Note>
+サーバークイックスタートからウェザーチュートリアルを続けている場合、コマンドは次のようになるかもしれません：`python client.py .../weather/src/weather/server.py`
+</Note>
+
+クライアントは以下を行います：
+1. 指定されたサーバーに接続
+2. 利用可能なツールを一覧表示
+3. インタラクティブなチャットセッションを開始し、以下が可能：
+   - クエリの入力
+   - ツール実行の確認
+   - Claudeからのレスポンスの取得
+
+サーバークイックスタートからのウェザーサーバーに接続した場合、次のように表示されるはずです：
+
+<Frame>
+  <img src="/images/client-claude-cli-python.png" />
+</Frame>
+
+## 仕組み
+
+クエリを送信すると：
+
+1. クライアントはサーバーから利用可能なツールのリストを取得
+2. あなたのクエリはツールの説明とともにClaudeに送信される
+3. Claudeはどのツール（あれば）を使用するかを決定
+4. クライアントはサーバーを通じて要求されたツール呼び出しを実行
+5. 結果はClaudeに送り返される
+6. Claudeは自然言語でのレスポンスを提供
+7. レスポンスがあなたに表示される
+
+## ベストプラクティス
+
+1. **エラー処理**
+   - 常にツール呼び出しをtry-catchブロックでラップする
+   - 意味のあるエラーメッセージを提供する
+   - 接続問題を適切に処理する
+
+2. **リソース管理**
+   - 適切なクリーンアップのために`AsyncExitStack`を使用する
+   - 完了したら接続を閉じる
+   - サーバー切断を処理する
+
+3. **セキュリティ**
+   - APIキーを`.env`に安全に保存する
+   - サーバーレスポンスを検証する
+   - ツールの権限に注意する
+
+## トラブルシューティング
+
+### サーバーパスの問題
+- サーバースクリプトへのパスが正しいか再確認する
+- 相対パスがうまく機能しない場合は絶対パスを使用する
+- Windowsユーザーの場合、パスにはフォワードスラッシュ（/）またはエスケープされたバックスラッシュ（\\）を使用してください
+- サーバーファイルが正しい拡張子（Pythonの場合は.py、Node.jsの場合は.js）を持っていることを確認する
+
+正しいパスの使用例：
+```bash
+# 相対パス
+uv run client.py ./server/weather.py
+
+# 絶対パス
+uv run client.py /Users/username/projects/mcp-server/weather.py
+
+# Windowsパス（どちらの形式でも機能します）
+uv run client.py C:/projects/mcp-server/weather.py
+uv run client.py C:\\projects\\mcp-server\\weather.py
+```
+
+### レスポンスタイミング
+- 最初のレスポンスは返ってくるまでに最大30秒かかる場合があります
+- これは以下の間に正常に発生します：
+  - サーバーが初期化される
+  - Claudeがクエリを処理する
+  - ツールが実行されている
+- その後のレスポンスは通常より速くなります
+- この初期待機期間中にプロセスを中断しないでください
+
+### 一般的なエラーメッセージ
+
+以下のようなメッセージが表示された場合：
+- `FileNotFoundError`：サーバーパスを確認してください
+- `Connection refused`：サーバーが実行中でパスが正しいことを確認してください
+- `Tool execution failed`：ツールに必要な環境変数が設定されていることを確認してください
+- `Timeout error`：クライアント設定でタイムアウトを増やすことを検討してください
+
+</Tab>
+
+<Tab title="Java">
+
+<Note>
+これは、Spring AI MCP自動設定とブートスターターに基づくクイックスタートデモです。
+同期および非同期MCP Clientを手動で作成する方法については、[Java SDK Client](/sdk/java/mcp-client)のドキュメントを参照してください。
+</Note>
+
+この例では、Spring AIのModel Context Protocol (MCP)と[Brave Search MCP Server](https://github.com/modelcontextprotocol/servers/tree/main/src/brave-search)を組み合わせたインタラクティブなチャットボットを構築する方法を示します。このアプリケーションは、Brave Search経由でインターネット検索を実行できるAnthropicのClaude AIモデルを搭載した会話インターフェースを作成し、リアルタイムのWebデータとの自然言語対話を可能にします。
+[このチュートリアルの完全なコードはこちらで見つけることができます。](https://github.com/spring-projects/spring-ai-examples/tree/main/model-context-protocol/web-search/brave-chatbot)
+
+## システム要件
+
+始める前に、システムが以下の要件を満たしていることを確認してください：
+- Java 17以上
+- Maven 3.6+
+- npxパッケージマネージャ
+- Anthropic APIキー（Claude）
+- Brave Search APIキー
+
+## 環境のセットアップ
+
+1. npx（Node Package eXecute）をインストール：
+   まず、[npm](https://docs.npmjs.com/downloading-and-installing-node-js-and-npm)をインストールし、
+   次に実行します：
+   ```bash
+   npm install -g npx
+   ```
+
+2. リポジトリをクローン：
+   ```bash
+   git clone https://github.com/spring-projects/spring-ai-examples.git
+   cd model-context-protocol/brave-chatbot
+   ```
+
+3. APIキーを設定：
+   ```bash
+   export ANTHROPIC_API_KEY='あなたのAnthropic-APIキーをここに入力'
+   export BRAVE_API_KEY='あなたのBrave-APIキーをここに入力'
+   ```
+
+4. アプリケーションをビルド：
+   ```bash
+   ./mvnw clean install
+   ```
+
+5. Mavenを使用してアプリケーションを実行：
+   ```bash
+   ./mvnw spring-boot:run
+   ```
+
+<Warning>
+`ANTHROPIC_API_KEY`と`BRAVE_API_KEY`キーを安全に保管してください！
+</Warning>
+
+
+## 仕組み
+
+このアプリケーションは、いくつかのコンポーネントを通じてSpring AIとBrave Search MCPサーバーを統合しています：
+
+### MCPクライアント構成
+
+1. pom.xmlでの必要な依存関係：
+```xml
+<dependency>
+    <groupId>org.springframework.ai</groupId>
+    <artifactId>spring-ai-mcp-client-spring-boot-starter</artifactId>
+</dependency>
+<dependency>
+    <groupId>org.springframework.ai</groupId>
+    <artifactId>spring-ai-anthropic-spring-boot-starter</artifactId>
+</dependency>
+```
+
+2. アプリケーションプロパティ（application.yml）：
+```yml
+spring:
+  ai:
+    mcp:
+      client:
+        enabled: true
+        name: brave-search-client
+        version: 1.0.0
+        type: SYNC
+        request-timeout: 20s
+        stdio:
+          root-change-notification: true
+          servers-configuration: classpath:/mcp-servers-config.json
+    anthropic:
+      api-key: ${ANTHROPIC_API_KEY}
+```
+
+これにより、提供されたサーバー構成に基づいて1つ以上の`McpClient`を作成するために`spring-ai-mcp-client-spring-boot-starter`が有効化されます。
+
+3. MCPサーバー構成（`mcp-servers-config.json`）：
+```json
+{
+  "mcpServers": {
+    "brave-search": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-brave-search"
+      ],
+      "env": {
+        "BRAVE_API_KEY": "<ここにあなたのBRAVE APIキーを入力>"
+      }
+    }
+  }
+}
+```
+
+### チャット実装
+
+チャットボットはMCPツール統合を使用したSpring AIのChatClientを使って実装されています：
+
+```java
+var chatClient = chatClientBuilder
+    .defaultSystem("You are useful assistant, expert in AI and Java.")
+    .defaultTools((Object[]) mcpToolAdapter.toolCallbacks())
+    .defaultAdvisors(new MessageChatMemoryAdvisor(new InMemoryChatMemory()))
+    .build();
+```
+
+主な特徴：
+- 自然言語理解のためにClaude AIモデルを使用
+- リアルタイムのWeb検索機能用のMCP経由でBrave Searchを統合
+- InMemoryChatMemoryを使用して会話メモリを維持
+- インタラクティブなコマンドラインアプリケーションとして実行
+
+### ビルドと実行
+
+```bash
+./mvnw clean install
+java -jar ./target/ai-mcp-brave-chatbot-0.0.1-SNAPSHOT.jar
+```
+
+または
+
+```bash
+./mvnw spring-boot:run
+```
+
+アプリケーションはインタラクティブなチャットセッションを開始し、質問をすることができます。チャットボットはクエリに答えるためにインターネットから情報を見つける必要がある場合、Brave Searchを使用します。
+
+チャットボットができること：
+- 組み込みの知識を使用して質問に答える
+- 必要な場合、Brave Searchを使用してWeb検索を実行する
+- 会話内の前のメッセージからコンテキストを記憶する
+- 複数のソースからの情報を組み合わせて包括的な回答を提供する
+
+### 高度な構成
+
+MCPクライアントは追加の構成オプションをサポートしています：
+
+- `McpSyncClientCustomizer`または`McpAsyncClientCustomizer`を通じたクライアントのカスタマイズ
+- 複数のトランスポートタイプ（`STDIO`およびサーバー送信イベント`SSE`）による複数のクライアント
+- Spring AIのツール実行フレームワークとの統合
+- 自動クライアント初期化とライフサイクル管理
+
+WebFluxベースのアプリケーションの場合、代わりにWebFluxスターターを使用できます：
+
+```xml
+<dependency>
+    <groupId>org.springframework.ai</groupId>
+    <artifactId>spring-ai-mcp-client-webflux-spring-boot-starter</artifactId>
+</dependency>
+```
+
+これは同様の機能を提供しますが、本番環境デプロイメントに推奨されるWebFluxベースのSSEトランスポート実装を使用します。
+
+</Tab>
+
+</Tabs>
+
+## 次のステップ
+
+<CardGroup cols={2}>
+  <Card
+    title="サーバー例"
+    icon="grid"
+    href="/examples"
+  >
+    公式MCPサーバーと実装のギャラリーをチェックしてください
+  </Card>
+  <Card
+    title="クライアント"
+    icon="cubes"
+    href="/clients"
+  >
+    MCP統合をサポートするクライアントのリストを表示
+  </Card>
+  <Card
+    title="LLMでMCPを構築"
+    icon="comments"
+    href="/building-mcp-with-llms"
+  >
+    ClaudeのようなLLMを使用してMCP開発を加速する方法を学ぶ
+  </Card>
+   <Card
+    title="コアアーキテクチャ"
+    icon="sitemap"
+    href="/docs/concepts/architecture"
+  >
+    MCPがクライアント、サーバー、LLMをどのように接続するかを理解する
+  </Card>
+</CardGroup>
